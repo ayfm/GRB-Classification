@@ -1,0 +1,6 @@
+conda install numpy pandas scikit-learn matplotlib scipy
+conda install astropy
+conda install openpyxl
+conda install -c conda-forge xlsxwriter
+conda install -c conda-forge hdbscan
+pip install mixes
