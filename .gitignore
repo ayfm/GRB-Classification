@@ -128,3 +128,7 @@ dmypy.json
 
 # Lock objects for office files
 *.~lock*
+*$*
+
+# test folder
+tests/
