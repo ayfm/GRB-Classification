@@ -1,4 +1,4 @@
-from typing import Any, Literal, Dict
+from typing import Any, Literal, Dict, Union
 
 from numpy.random import RandomState
 from numpy.typing import ArrayLike
@@ -23,10 +23,10 @@ class GaussianMixtureModel(GaussianMixture):
         init_params: Literal[
             "kmeans", "k-means++", "random", "random_from_data"
         ] = "kmeans",
-        weights_init: ArrayLike | None = None,
-        means_init: ArrayLike | None = None,
-        precisions_init: ArrayLike | None = None,
-        random_state: int | RandomState | None = None,
+        weights_init: Union[ArrayLike, None] = None,
+        means_init: Union[ArrayLike, None] = None,
+        precisions_init: Union[ArrayLike, None] = None,
+        random_state: Union[int, RandomState, None] = None,
         warm_start: bool = False,
         verbose: int = 0,
         verbose_interval: int = 10
@@ -47,13 +47,13 @@ class GaussianMixtureModel(GaussianMixture):
             verbose=verbose,
             verbose_interval=verbose_interval,
         )
-
-    def remap_cluster_labels(self, label_map: Dict) -> None:
+   
+    def remap_labels(self, label_map: Dict[int, int]) -> None:
         """
         Remaps the cluster labels based on a given label map.
     
         Args:
-            label_map (Dict): A dictionary mapping original cluster labels to new cluster labels.
+            label_map (Dict[int, int]): A dictionary mapping existing cluster labels to new cluster labels.
     
         Raises:
             ValueError: If the label_map does not contain a mapping for each cluster.
@@ -61,56 +61,45 @@ class GaussianMixtureModel(GaussianMixture):
     
         Notes:
             - This method updates the parameters of the Gaussian Mixture Model (GMM) instance
-                to reflect the new cluster labels.
+            to reflect the new cluster labels.
             - The clusters are identified by integer labels starting from 0 to n_components-1,
-                where n_components is the total number of clusters in the GMM.
-            - The label_map should provide a mapping for each original cluster label,
-                and the new cluster labels should also cover all the clusters.
+            where n_components is the total number of clusters in the GMM.
+            - The label_map should provide a mapping for each existing cluster label,
+            and the new cluster labels should also cover all the clusters.
     
         Example:
             label_map = {0: 1, 1: 2, 2: 0}
-            gmm.remap_cluster_labels(label_map)
-        """ 
-
-        # raise exception if the model is not fitted
+            gmm.remap_labels(label_map)
+        """
+    
+        # Raise an exception if the model is not fitted
         if not self.converged_:
             raise ValueError("The model is not fitted yet.")
+        
+        # get the set of labels
+        label_set = set(range(self.n_components))
 
-        # get original cluster labels from the label map
-        original_cluster_labels = list(set(label_map.keys()))
-        # sort the original cluster labels
-        original_cluster_labels.sort()
-
-        # get new cluster labels from the label map
-        new_cluster_labels = list(set(label_map.values()))
-        # sort the new cluster labels
-        new_cluster_labels.sort()
-
-        # check if label_map contains a mapping for each cluster
-        if original_cluster_labels != list(range(self.n_components)):
-            raise ValueError("label_map must contain a mapping for each cluster")
-
-        # check if label_map contains a mapping for each cluster
-        if new_cluster_labels != list(range(self.n_components)):
-            raise ValueError("label_map must contain a mapping for each cluster")
-
-        # create a tuple from the label_map
-        label_map_tuple = tuple(label_map.items())
-        # sort tuple by the original cluster labels
-        label_map_tuple = sorted(label_map_tuple, key=lambda x: x[0])
-        # get the list of the new cluster labels
-        new_cluster_labels = [x[1] for x in label_map_tuple]
-
-        # now, we should update the parameters of GMM to reflect the new cluster labels
+        # Check if label_map contains a mapping for each cluster
+        if set(label_map.keys()) != label_set:
+            raise ValueError("label_map must contain a mapping for each existing cluster")
+    
+        # Check if label_map contains a mapping for each cluster
+        if set(label_map.values()) != label_set:
+            raise ValueError("label_map must contain a mapping for each new cluster")
+    
+        # Create a tuple from the label_map
+        label_map_tuple = sorted(label_map.items(), key=lambda x: x[1])
+        # Get the list of the new cluster labels
+        new_cluster_labels = [x[0] for x in label_map_tuple]
+    
+        # Update the GMM parameters to reflect the new cluster labels
         self.weights_ = self.weights_[new_cluster_labels]
         self.means_ = self.means_[new_cluster_labels]
-
+     
         # update the matrices if the covariance type is not tied
         # i.e. if the covariance type is tied, then the covariance matrix is the same for all clusters
-        if self.covariance_type != "tied":
-            self.precisions_ = self.precisions_[new_cluster_labels]
+        if self.covariance_type != 'tied':
             self.covariances_ = self.covariances_[new_cluster_labels]
-            self.precisions_cholesky_ = self.precisions_cholesky_[new_cluster_labels]
             self.precisions_ = self.precisions_[new_cluster_labels]
+            self.precisions_cholesky_ = self.precisions_cholesky_[new_cluster_labels]
 
-        
