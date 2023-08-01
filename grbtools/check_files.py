@@ -1,5 +1,6 @@
 import pandas as pd
-
+import os
+"""
 df1 = pd.read_excel("../data_sources/batse_3July2023.xls")  # Read the first Excel file
 df2 = pd.read_excel("../data_sources/batse_catalog.xlsx.xls")  # Read the second Excel file
 
@@ -70,3 +71,9 @@ for index, row in file1.iterrows():
 print("Mismatched trigger_nums:")
 for trigger_num in mismatched_trigger_nums:
     print(trigger_num)
+    
+"""
+def checkModelFiles(model_path):
+    return os.path.isfile(model_path)
+        
+    

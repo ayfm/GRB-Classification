@@ -96,7 +96,7 @@ def calculate_luminosity(t1_data):
     kcorr_lum = np.repeat(np.nan, num_files)
     kcorr = np.repeat(np.nan, num_files)
     flux = np.repeat(np.nan, num_files)
-    model_used = np.repeat("", num_files)
+    model_used = np.repeat("None", num_files)
 
     e1 = 15.0
     e2 = 150.0

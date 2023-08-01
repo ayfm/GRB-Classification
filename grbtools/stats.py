@@ -8,6 +8,7 @@ from sklearn.metrics import pairwise_distances
 from sklearn.metrics import davies_bouldin_score as dbs, calinski_harabasz_score as chs
 from copy import deepcopy 
 from sklearn.neighbors import NearestNeighbors
+from sklearn.mixture import GaussianMixture
 
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
@@ -314,3 +315,12 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
 
     return H
  
+def bic(model, X: ArrayLike) -> float:
+    if model == None:
+        return np.nan
+    return model.bic(X)
+
+def aic(model, X: ArrayLike) -> float:
+    if model == None:
+        return np.nan
+    return model.aic(X)
