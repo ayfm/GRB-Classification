@@ -1,12 +1,13 @@
+from copy import deepcopy
 from typing import Dict, Iterable, Literal, Optional, Union
+
 import numpy as np
 from numpy.typing import ArrayLike
-from sklearn.metrics import silhouette_samples
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
-from sklearn.metrics import pairwise_distances
-from sklearn.metrics import davies_bouldin_score as dbs, calinski_harabasz_score as chs
-from copy import deepcopy 
+from sklearn.metrics import calinski_harabasz_score as chs
+from sklearn.metrics import davies_bouldin_score as dbs
+from sklearn.metrics import pairwise_distances, silhouette_samples
 from sklearn.neighbors import NearestNeighbors
 
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
