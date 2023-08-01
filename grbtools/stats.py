@@ -4,6 +4,7 @@ from typing import Dict, Iterable, Literal, Optional, Union
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.spatial.distance import cdist
+from scipy.stats import entropy, gaussian_kde
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
@@ -315,3 +316,57 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
 
     return H
  
+
+def jensen_shannon_distance(X1: ArrayLike, X2: ArrayLike, base=2):
+    """
+    Compute the Jensen-Shannon distance (JSD) between two data sets.
+
+    The JSD is a symmetrical and finite measure of the similarity between two probability distributions. 
+    It is derived from the Kullback-Leibler Divergence (KLD), a measure of how one probability distribution 
+    diverges from a second, expected probability distribution. Unlike KLD, JSD is symmetrical, giving the 
+    same value for JSD(P||Q) and JSD(Q||P), where P and Q are the two distributions being compared.
+
+    A JSD value of 0 indicates that the distributions are identical. Higher values indicate that the 
+    distributions are more different from each other. The maximum value of JSD is log2 (for base=2), 
+    which occurs when the two distributions are mutually singular.
+
+    Parameters
+    ----------
+    X1 : array-like
+        First data set.
+    X2 : array-like
+        Second data set.
+    base : float, optional
+        The logarithmic base to use, defaults to `e` (natural logarithm).
+
+    Returns
+    -------
+    jsd : float
+        The Jensen-Shannon distance between `X1` and `X2`.
+    """
+    
+    # Convert data sets to numpy arrays
+    X1 = np.array(X1)
+    X2 = np.array(X2)
+    
+    # Create a range over which to evaluate the PDFs
+    x_range = np.linspace(min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=100)
+    
+    # Estimate PDFs of X1 and X2
+    pdf1 = gaussian_kde(X1.ravel(), bw_method="scott")(x_range)
+    pdf2 = gaussian_kde(X2.ravel(), bw_method="scott")(x_range)
+    
+    # Make sure PDFs sum to 1
+    pdf1 /= np.sum(pdf1)
+    pdf2 /= np.sum(pdf2)
+    
+    # Compute the average distribution
+    pdf_avg = 0.5 * (pdf1 + pdf2)
+    
+    # Compute Jensen-Shannon divergence
+    js_divergence = 0.5 * (entropy(pdf1, pdf_avg, base=base) + entropy(pdf2, pdf_avg, base=base))
+    
+    # Compute Jensen-Shannon distance
+    js_distance = np.sqrt(js_divergence)
+    
+    return js_distance
