@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Dict, Iterable, Literal, Optional, Union
 
 import numpy as np
+import ot
 from numpy.typing import ArrayLike
 from scipy.spatial.distance import cdist
 from scipy.stats import entropy, gaussian_kde
@@ -370,3 +371,90 @@ def jensen_shannon_distance(X1: ArrayLike, X2: ArrayLike, base=2):
     js_distance = np.sqrt(js_divergence)
     
     return js_distance
+
+
+def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_iter: int = 1000000) -> float:
+    """
+    Compute the Wasserstein distance between two multi-dimensional distributions.
+
+    This function relies on the Python Optimal Transport (POT) library.
+
+    Parameters
+    ----------
+    X1, X2 : array-like, shape = [n_samples, n_dimensions]
+        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
+
+    random_state : int, RandomState instance, default=None
+        Determines random number generation for dataset creation.
+        Pass an int for reproducible output across multiple function calls.
+
+    max_iter : int, default=None
+        Maximum number of iterations for optimization algorithm. The default value is 1000000.
+
+    Returns
+    -------
+    distance : float
+        The computed square root of the Wasserstein distance (i.e., the actual Wasserstein distance) 
+        between the two input distributions.
+
+    Notes
+    -----
+    The Wasserstein distance is a distance measure between probability distributions. It's defined as the minimum
+    cost that is enough to transform one distribution into the other. Cost is measured in the amount of distribution
+    weight that must be moved and the distance it has to be moved.
+
+    The Wasserstein distance takes values from 0 to +inf. The value is 0 if and only if the distributions are equal. 
+    Larger values indicate that more cost is required to transform one distribution into the other, meaning the distributions
+    are more different.
+
+    This function computes the Wasserstein distance in a multidimensional space. It uses the Python Optimal Transport (POT) 
+    library to do so.
+    """
+ 
+    # if X1 and X2 are 1-dimensional, reshape them to 2-dimensional
+    if len(X1.shape) == 1:
+        X1 = X1.reshape(-1, 1)
+    if len(X2.shape) == 1:
+        X2 = X2.reshape(-1, 1)
+
+    # make sure that X1 and X2 have the same number of dimensions
+    if X1.shape[1] != X2.shape[1]:
+        raise ValueError("X1 and X2 must have the same number of dimensions.")
+
+    # set the random seed
+    np.random.seed(random_state)
+
+    # Compute a uniform distribution over the samples
+    a, b = np.ones((X1.shape[0],))/X1.shape[0], np.ones((X2.shape[0],))/X2.shape[0]
+
+    # Compute the cost matrix (Euclidean distance in this case)
+    M = ot.dist(X1, X2, metric='sqeuclidean')
+
+    # Compute the Wasserstein distance
+    wasserstein_distance = ot.emd2(a, b, M, numItermax=max_iter)
+
+    # Compute the square root of the Wasserstein distance to get the actual Wasserstein distance
+    wasserstein_distance = np.sqrt(wasserstein_distance)
+
+    return wasserstein_distance
+
+
+def normalize_wasserstein_distance(d: float, scale: float=1.0) -> float:
+    """
+    Normalize a Wasserstein distance to a value between 0 and 1 using a sigmoid function.
+
+    Parameters
+    ----------
+    d : float
+        The Wasserstein distance to normalize.
+
+    scale : float, default=1.0
+        The scale parameter for the sigmoid function. Larger values will squash
+        the output closer to 0 or 1.
+
+    Returns
+    -------
+    distance : float
+        The normalized distance.
+    """
+    return 1 / (1 + np.exp(-d * scale))
