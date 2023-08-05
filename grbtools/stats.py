@@ -300,7 +300,7 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
     np.random.seed(random_state)
 
     # randomly sample n datapoints
-    samples = X[np.random.choice(N, size=n, replace=False)]
+    samples = sample(X, size=n, replace=False)
 
     # Fit a nearest neighbor model to the data
     nbrs = NearestNeighbors(n_neighbors=2, algorithm='brute').fit(X)
