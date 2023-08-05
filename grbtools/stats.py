@@ -205,7 +205,24 @@ def silhouette_score(
     return {"mean": mean_coeff, "coeffs": sample_coeffs}
 
 
-def dispersion(X: ArrayLike, labels: ArrayLike):
+def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
+    """
+    Compute the total intra-cluster dispersion for the given data and labels.
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape = [n_samples, n_features]
+        The input samples. Each row corresponds to a sample, and each column corresponds to a feature of the sample.
+    
+    labels : np.ndarray, shape = [n_samples]
+        The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
+    
+    Returns
+    -------
+    dispersion : float
+        The total intra-cluster dispersion for the given data and labels. This is the sum of the squared distances of each
+        point to the centroid of its assigned cluster.
+    """
     clusters = np.unique(labels)
     dispersion = 0
     for cluster in clusters:
@@ -216,8 +233,48 @@ def dispersion(X: ArrayLike, labels: ArrayLike):
 
 
 def gap_statistics(
-    X: ArrayLike, labels: ArrayLike, clusterer=None, n_repeat=10, random_state=None
-):
+    X: np.ndarray, labels: np.ndarray, clusterer=None, n_repeat:int = 10, random_state=None
+) -> Dict[str, float]:
+    """
+    Compute the gap statistic for the given data and labels.
+    
+    The gap statistic compares the total intra-cluster dispersion of the input data to that of a reference dataset 
+    generated from a uniform distribution with the same range as the input data.
+
+    A higher gap value indicates that the clustering structure in the input data is stronger relative to a 
+    random distribution, while a lower (including negative) gap value suggests that the clustering structure in the 
+    input data is not significantly different from a random distribution.
+    
+    The gap value theoretically ranges from negative infinity (when the clustering structure of the input data is significantly 
+    worse than the random reference data) to positive infinity (when the clustering structure of the input data is 
+    significantly better than the random reference data). In practice, a negative gap value would typically suggest 
+    no meaningful clustering structure in the input data.
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape = [n_samples, n_features]
+        The input samples. Each row corresponds to a sample, and each column corresponds to a feature of the sample.
+    
+    labels : np.ndarray, shape = [n_samples]
+        The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
+        
+    clusterer : estimator object implementing 'fit_predict'
+        The clusterer to use for the data. If `None`, `KMeans` with the same number of clusters as the labels will be used.
+        
+    n_repeat : int, optional
+        Number of times to generate a reference dataset and compute its dispersion. Default is 10.
+        
+    random_state : int or None, optional
+        Determines random number generation for dataset creation. Pass an int for reproducible output across multiple 
+        function calls. If None, the random number generator is the RandomState instance used by np.random. Default is None.
+
+    Returns
+    -------
+    gap_dict : dict
+        A dictionary with two keys. The 'gap' key corresponds to the gap statistic: the log of the average dispersion of 
+        the reference datasets minus the log dispersion of the input data. The 'gap_err' key corresponds to the standard 
+        deviation of the gap statistic, scaled by a factor sqrt(1 + 1/n_repeat).
+    """
     # if clusterer is not specified, use KMeans with the same number of clusters as the labels
     if clusterer is None:
         clusterer = KMeans(n_clusters=len(np.unique(labels)))
@@ -251,6 +308,7 @@ def gap_statistics(
     gap_err = np.std(ref_disps) * np.sqrt(1 + 1 / n_repeat)
 
     return {"gap": gap, "gap_err": gap_err}
+ 
 
 
 def davies_bouldin_score(X: ArrayLike, labels: ArrayLike) -> float:
