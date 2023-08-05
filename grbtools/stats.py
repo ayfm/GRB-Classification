@@ -27,6 +27,7 @@ def _set_seed(seed: Optional[int] = None) -> None:
     if seed is not None:
         np.random.seed(seed)
 
+
 def compute_mahalanobis_distance(
     X: ArrayLike,
     mean: Union[ArrayLike, None] = None,
@@ -678,3 +679,84 @@ def normalize_wasserstein_distance(d: float, scale: float = 1.0) -> float:
     """
     return 1 / (1 + np.exp(-d * scale))
 
+
+def wasserstein_distance_bootstrap(
+    X1: np.ndarray,
+    X2: np.ndarray,
+    max_iter: int = 1000000,
+    n_repeat: int = 100,
+    sample_ratio: float = 1.0,
+    weights1: Optional[np.ndarray] = None,
+    weights2: Optional[np.ndarray] = None,
+    random_state: int = None,
+) -> Tuple[float, float]:
+    """
+    Compute the Wasserstein distance between two multi-dimensional distributions with bootstrapping.
+
+    Parameters
+    ----------
+    X1, X2 : np.ndarray, shape = [n_samples, n_dimensions]
+        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
+    n_repeat : int, optional
+        Number of bootstrap samples to generate. Default is 100.
+    max_iter : int, default=None
+        Maximum number of iterations for optimization algorithm. The default value is 1000000.
+    n_repeat : int, optional
+        Number of bootstrap samples to generate, defaults to 1000.
+    sample_ratio : float, optional
+        The ratio of the number of samples to the size of the data set, defaults to 1.0.
+    weights1 : np.ndarray, optional
+        Weights for the first data set.
+    weights2 : np.ndarray, optional
+        Weights for the second data set.
+    random_state : int or None, optional
+        If int, random_state is the seed used by the random number generator;
+        If None, the random number generator is the RandomState instance used by np.random. Default is None.
+    
+    Returns
+    -------
+    mean_distance : float
+        The mean Wasserstein distance calculated over the bootstrap samples.
+    std_distance : float
+        The standard deviation of the Wasserstein distances calculated over the bootstrap samples.
+    """
+
+    # Ensure the arrays are 2D
+    if len(X1.shape) == 1:
+        X1 = X1.reshape(-1, 1)
+    if len(X2.shape) == 1:
+        X2 = X2.reshape(-1, 1)
+
+    # make sure that X1 and X2 have the same number of dimensions
+    if X1.shape[1] != X2.shape[1]:
+        raise ValueError("X1 and X2 must have the same number of dimensions.")
+
+    # get size of each array
+    N1 = len(X1)
+    N2 = len(X2)
+
+    # Determine the number of bootstrap samples to generate for each array
+    n_samples1 = int(sample_ratio * N1)
+    n_samples2 = int(sample_ratio * N2)
+
+    # set the random seed
+    _set_seed(random_state)
+
+    distances = []
+    # Generate bootstrap samples and calculate distance for each
+    for _ in range(n_repeat):
+        # Sample from each array with replacement
+        sample_X1 = sample(X1, n_samples1, replace=True, weights=weights1)
+        sample_X2 = sample(X2, n_samples2, replace=True, weights=weights2)
+
+        # calculate the distance between the two samples
+        distance = wasserstein_distance(sample_X1, sample_X2, max_iter=max_iter)
+
+        # add the distance to the list
+        distances.append(distance)
+
+    # compute the mean and standard deviation of the distances
+    mean_distance = np.mean(distances)
+    std_distance = np.std(distances)
+
+    return mean_distance, std_distance
