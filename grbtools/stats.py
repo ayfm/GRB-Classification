@@ -314,6 +314,30 @@ def gap_statistics(
 
 
 def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
+    """
+    Compute the Davies-Bouldin score for a clustering result.
+    
+    The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity' 
+    between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances. 
+    Thus, clusters which are farther apart and less dispersed will result in a better score.
+    
+    The minimum score is 0, with smaller values indicating better clustering. 
+    The maximum score is unbounded, with larger values indicating worse clustering.
+    The DBI is undefined for a single cluster.
+
+    Parameters
+    ----------
+    X : array-like, shape = [n_samples, n_dimensions]
+        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
+    
+    labels : array-like, shape = [n_samples]
+        Cluster labels for each sample in the input data.
+
+    Returns
+    -------
+    davies_bouldin : float
+        The Davies-Bouldin score for the input clustering.
+    """
     # how many clusters?
     n_clusters = len(set(labels))
     # if there is only one cluster, we cannot calculate Davies-Bouldin score
@@ -322,8 +346,32 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
 
     return dbs(X, labels)
 
-
 def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
+    """
+    Compute the Calinski-Harabasz score for a clustering result.
+    
+    The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of 
+    between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering. 
+    The CHI is undefined for a single cluster.
+    
+    Theoretically, the Calinski-Harabasz index can be infinitely large but in practice it's usually within a 
+    finite range. The score is higher when clusters are dense and well separated.
+    The lower bound is 0, with lower values indicating worse clustering.
+    The upper bound is unbounded, with larger values indicating better clustering.
+
+    Parameters
+    ----------
+    X : array-like, shape = [n_samples, n_dimensions]
+        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
+    
+    labels : array-like, shape = [n_samples]
+        Cluster labels for each sample in the input data.
+
+    Returns
+    -------
+    calinski_harabasz : float
+        The Calinski-Harabasz score for the input clustering.
+    """
     # how many clusters?
     n_clusters = len(set(labels))
     # if there is only one cluster, we cannot calculate Calinski-Harabasz score
