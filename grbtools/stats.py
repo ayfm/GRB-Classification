@@ -208,9 +208,9 @@ def silhouette_score(
     return {"mean": mean_coeff, "coeffs": sample_coeffs}
 
 
-def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
+def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
     """
-    Compute the total intra-cluster dispersion for the given data and labels.
+    Compute the total intra-cluster dispersion (within-cluster sum of squares) for the given data and labels.
 
     Parameters
     ----------
@@ -305,11 +305,11 @@ def gap_statistics(
         ref_labels = clusterer.fit_predict(ref_X)
 
         # Compute the dispersion for the reference data
-        ref_disp = dispersion(ref_X, ref_labels)
+        ref_disp = intra_cluster_dispersion(ref_X, ref_labels)
         ref_disps[i] = np.log(ref_disp)
 
     # Compute the dispersion for the original data
-    orig_disp = dispersion(X, labels)
+    orig_disp = intra_cluster_dispersion(X, labels)
     orig_disp = np.log(orig_disp)
 
     # Compute the gap statistic
