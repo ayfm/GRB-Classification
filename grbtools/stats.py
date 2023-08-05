@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, Iterable, Literal, Optional, Union
+from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 
 import numpy as np
 import ot
@@ -316,11 +316,112 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
     H = sum_u / (sum_u + sum_d)
 
     return H
+
+
  
 
-def jensen_shannon_distance(X1: ArrayLike, X2: ArrayLike, base=2):
+def sample(X: np.ndarray, size: int, weights: Optional[np.ndarray] = None, 
+           replace: bool = True, random_state: int = None) -> np.ndarray:
     """
-    Compute the Jensen-Shannon distance (JSD) between two data sets.
+    Sample from an array of values with or without replacement.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Array of values to sample from.
+    size : int
+        Number of samples to draw.
+    weights : np.ndarray, optional
+        Weights associated with each value in `X`. If None, all values are equally likely to be drawn.
+    replace : bool, optional
+        Whether to sample with replacement or not. Default is True.
+    random_state : int, optional
+        Seed for the random number generator.
+
+    Returns
+    -------
+    np.ndarray
+        Array of samples.
+
+    Raises
+    ------
+    ValueError
+        If `size` is greater than the length of `X` and `replace` is False.
+    """
+
+    # get the length of X
+    N = len(X)
+
+    # Validate inputs
+    if size > N and not replace:
+        raise ValueError("Cannot draw more samples than exist in X without replacement.")
+    
+    if weights is not None and len(weights) != N:
+        raise ValueError("`weights` must be the same length as `X`.")
+
+    # If weights is not provided, use uniform distribution
+    if weights is None:
+        weights = np.ones(shape=(N,)) / N
+
+    # Normalize weights
+    weights /= np.sum(weights)
+
+    # Set random state if provided
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    # Sample indices
+    idx = np.random.choice(N, size=size, p=weights, replace=replace)
+
+    # Get samples
+    samples = X[idx]
+
+    return samples
+
+def js_divergence(pdf1: np.ndarray, pdf2: np.ndarray, base=2) -> float:
+    """
+    Compute the Jensen-Shannon divergence of two probability density functions (PDFs).
+
+    Parameters
+    ----------
+    pdf1 : np.ndarray
+        First probability density function.
+    pdf2 : np.ndarray
+        Second probability density function.
+    base : int, optional
+        The logarithmic base to use, defaults to `2`.
+
+    Returns
+    -------
+    float
+        The Jensen-Shannon divergence.
+    """
+    
+    # create a copy of the arrays
+    pdf1 = pdf1.copy()
+    pdf2 = pdf2.copy()
+    
+    # Make sure PDFs sum to 1
+    pdf1 /= np.sum(pdf1)
+    pdf2 /= np.sum(pdf2)
+    
+    # Compute the average distribution
+    pdf_avg = 0.5 * (pdf1 + pdf2)
+    
+    # Compute Jensen-Shannon divergence
+    js_divergence = 0.5 * (entropy(pdf1, pdf_avg, base=base) + entropy(pdf2, pdf_avg, base=base))
+    
+    return js_divergence
+
+def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2, 
+                bandwidth_method: str='scott',
+                grid_size: int = 100, 
+                n_repeat: int = 1000, sample_ratio: float = 1.0,
+                weights1: Optional[np.ndarray] = None, 
+                weights2: Optional[np.ndarray] = None, 
+                random_state: Optional[int] = None) -> Tuple[float, float]:
+    """
+    Compute the Jensen-Shannon distance (JSD) between two data sets with bootstrapping.
 
     The JSD is a symmetrical and finite measure of the similarity between two probability distributions. 
     It is derived from the Kullback-Leibler Divergence (KLD), a measure of how one probability distribution 
@@ -333,44 +434,80 @@ def jensen_shannon_distance(X1: ArrayLike, X2: ArrayLike, base=2):
 
     Parameters
     ----------
-    X1 : array-like
+    X1 : np.ndarray
         First data set.
-    X2 : array-like
+    X2 : np.ndarray
         Second data set.
-    base : float, optional
-        The logarithmic base to use, defaults to `e` (natural logarithm).
+    base : int, optional
+        The logarithmic base to use, defaults to `2`.
+    bandwidth_method : str, optional
+        The method used to calculate the bandwidth for the KDE, defaults to 'scott'.
+    grid_size : int, optional
+        Number of points where the PDFs are evaluated, defaults to 100.
+    n_repeat : int, optional
+        Number of bootstrap samples to generate, defaults to 1000.
+    sample_ratio : float, optional
+        The ratio of the number of samples to the size of the data set, defaults to 1.0.
+    weights1 : np.ndarray, optional
+        Weights for the first data set.
+    weights2 : np.ndarray, optional
+        Weights for the second data set.
+    random_state : int, optional
+        Seed for the random number generator.
 
     Returns
     -------
-    jsd : float
-        The Jensen-Shannon distance between `X1` and `X2`.
+    tuple of float
+        The mean and standard deviation of the Jensen-Shannon distances between `X1` and `X2`.
     """
     
-    # Convert data sets to numpy arrays
-    X1 = np.array(X1)
-    X2 = np.array(X2)
+    # reshape the data if it's 1-dimensional
+    if len(X1.shape) == 1:
+        X1 = X1.reshape(-1, 1)
+    if len(X2.shape) == 1:
+        X2 = X2.reshape(-1, 1)
+
+    # get size of each array
+    N1 = len(X1)
+    N2 = len(X2)
+
+    # Determine the number of bootstrap samples to generate for each array
+    n_samples1 = int(sample_ratio * N1)
+    n_samples2 = int(sample_ratio * N2)
     
     # Create a range over which to evaluate the PDFs
-    x_range = np.linspace(min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=100)
+    x_range = np.linspace(min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=grid_size)
     
-    # Estimate PDFs of X1 and X2
-    pdf1 = gaussian_kde(X1.ravel(), bw_method="scott")(x_range)
-    pdf2 = gaussian_kde(X2.ravel(), bw_method="scott")(x_range)
+    # set random state
+    np.random.seed(random_state)
+
+    # Store the calculated distances
+    distances = []
+
+    # Generate bootstrap samples and calculate JSD for each
+    for _ in range(n_repeat):   
+
+        # Sample from each array with replacement
+        sample1 = sample(X1, size=n_samples1, weights=weights1)
+        sample2 = sample(X2, size=n_samples2, weights=weights2)
+
+        # Estimate PDFs of samples
+        pdf1 = gaussian_kde(sample1.ravel(), bw_method=bandwidth_method)(x_range)
+        pdf2 = gaussian_kde(sample2.ravel(), bw_method=bandwidth_method)(x_range)
     
-    # Make sure PDFs sum to 1
-    pdf1 /= np.sum(pdf1)
-    pdf2 /= np.sum(pdf2)
+        # Calculate JS-Divergence
+        js_div = js_divergence(pdf1, pdf2, base=base)
+        # Calculate JS-Distance
+        js_dist = np.sqrt(js_div)
+        # store the distance
+        distances.append(js_dist)
+
+    # Calculate the mean and standard deviation of the distances
+    jsd_mean = np.mean(distances)
+    jsd_std = np.std(distances)
     
-    # Compute the average distribution
-    pdf_avg = 0.5 * (pdf1 + pdf2)
-    
-    # Compute Jensen-Shannon divergence
-    js_divergence = 0.5 * (entropy(pdf1, pdf_avg, base=base) + entropy(pdf2, pdf_avg, base=base))
-    
-    # Compute Jensen-Shannon distance
-    js_distance = np.sqrt(js_divergence)
-    
-    return js_distance
+    return jsd_mean, jsd_std
+
 
 
 def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_iter: int = 1000000) -> float:
