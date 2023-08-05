@@ -10,7 +10,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import pairwise_distances, silhouette_samples
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import NearestNeighbors, KernelDensity
 
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
@@ -1108,3 +1108,67 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
         print("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
+
+
+def detect_outliers(
+    X: np.ndarray,
+    density_threshold: float,
+    bandwidth: Union[float, str] = "scott",
+    kernel: str = "gaussian",
+) -> Dict:
+    """
+    Perform outlier detection using Kernel Density Estimation.
+
+    This function uses Kernel Density Estimation to model the probability density of the input data
+    and identifies outliers as points that have a density below a certain threshold.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data.
+
+    density_threshold : float
+        Density threshold for identifying outliers. Points with a density below this value are considered outliers.
+
+    bandwidth : Union[float, str], optional
+        The bandwidth of the kernel. Can be specified as a float or one of the following strings:
+        'scott', 'silverman'. The default is 'scott'. If a string is passed, the bandwidth is estimated using the
+        corresponding rule.
+
+    kernel : str, optional
+        The kernel to be used in the density estimation. Should be one of the following:
+        'gaussian', 'tophat', 'epanechnikov', 'exponential', 'linear', 'cosine'. The default is 'gaussian'.
+
+    Returns
+    -------
+    Dict:
+        'is_outlier': np.ndarray
+            Boolean array of the same shape as X. If the ith element of 'is_outlier' is True,
+            then the ith element of X is considered an outlier.
+
+        'density': np.ndarray
+            Array of the same shape as X representing the estimated density of each point.
+
+    Notes
+    -----
+     - This function treats outliers as points that are unlikely under the estimated density model of the input data.
+     - It should be noted that this outlier detection method is unsupervised,
+    meaning it doesn't require labeled data and it doesn't make any assumptions about the distribution of outliers.
+     - This method may be problematic for high-dimensional data.
+    """
+
+    # reshape the data if it's 1-dimensional
+    if len(X.shape) == 1:
+        X = X.reshape(-1, 1)
+
+    # Fit the KernelDensity estimator to the data
+    kde = KernelDensity(bandwidth=bandwidth, kernel=kernel).fit(X)
+
+    # Estimate the density of the data
+    log_dens = kde.score_samples(X)
+    dens = np.exp(log_dens)
+
+    # Identify outliers as points with a density below the threshold
+    is_outlier = dens < density_threshold
+
+    return {"is_outlier": is_outlier, "density": dens}
