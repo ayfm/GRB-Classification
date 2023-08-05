@@ -15,7 +15,6 @@ from sklearn.neighbors import NearestNeighbors
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
 
-
 def compute_mahalanobis_distance(
     X: ArrayLike,
     mean: Union[ArrayLike, None] = None,
@@ -79,9 +78,9 @@ def silhouette_samples_mahalanobis(
     Parameters:
         X (ArrayLike): Input data array of shape (N, d), where N is the number of samples and d is the number of features.
         labels (ArrayLike): Array of cluster assignments for each data point, of shape (N,).
-        means (Union[ArrayLike, None], optional): Cluster mean vectors. If None, they will be calculated from the data. 
+        means (Union[ArrayLike, None], optional): Cluster mean vectors. If None, they will be calculated from the data.
             Must have shape (n_clusters, d), where n_clusters is the number of clusters.
-        covars (Union[ArrayLike, None], optional): Cluster covariance matrices. If None, they will be calculated from the data. 
+        covars (Union[ArrayLike, None], optional): Cluster covariance matrices. If None, they will be calculated from the data.
             Must have shape (n_clusters, d, d), where n_clusters is the number of clusters.
 
     Returns:
@@ -135,7 +134,7 @@ def silhouette_samples_mahalanobis(
     # Replace Mahalanobis distances for own clusters with infinity
     for i in range(N):
         mah_dist_arr[i, labels[i]] = np.inf
-        
+
     # calculate inter-cluster distance (b(x)) as minimum distance to other clusters
     b_x = mah_dist_arr.min(axis=1).reshape(-1, 1)
 
@@ -146,8 +145,9 @@ def silhouette_samples_mahalanobis(
     return sil_coeffs
 
 
-
-def silhouette_score(X: ArrayLike, labels: ArrayLike, metric: Literal["Euclidean", "Mahalanobis"] = None):
+def silhouette_score(
+    X: ArrayLike, labels: ArrayLike, metric: Literal["Euclidean", "Mahalanobis"] = None
+):
     """
     Calculates the silhouette score for a clustering.
 
@@ -171,7 +171,7 @@ def silhouette_score(X: ArrayLike, labels: ArrayLike, metric: Literal["Euclidean
 
     # if there is only one cluster, we cannot calculate silhouette score
     if n_clusters == 1:
-        return {'mean': np.nan, 'coeffs': np.nan}
+        return {"mean": np.nan, "coeffs": np.nan}
 
     # default metric is Euclidean
     if metric is None:
@@ -189,8 +189,7 @@ def silhouette_score(X: ArrayLike, labels: ArrayLike, metric: Literal["Euclidean
     # calculate mean score
     mean_coeff = np.mean(sample_coeffs)
 
-    return {'mean': mean_coeff, 'coeffs': sample_coeffs}
-
+    return {"mean": mean_coeff, "coeffs": sample_coeffs}
 
 
 def dispersion(X: ArrayLike, labels: ArrayLike):
@@ -202,14 +201,16 @@ def dispersion(X: ArrayLike, labels: ArrayLike):
         dispersion += ((cluster_points - centroid) ** 2).sum()
     return dispersion
 
-def gap_statistics(X: ArrayLike, labels:ArrayLike, clusterer=None, n_repeat=10, random_state=None):
+
+def gap_statistics(
+    X: ArrayLike, labels: ArrayLike, clusterer=None, n_repeat=10, random_state=None
+):
     # if clusterer is not specified, use KMeans with the same number of clusters as the labels
     if clusterer is None:
         clusterer = KMeans(n_clusters=len(np.unique(labels)))
     # otherwise, work with a clone of the clusterer
     else:
         clusterer = deepcopy(clusterer)
-    
 
     # Compute the gap statistic
     ref_disps = np.zeros(n_repeat)
@@ -234,9 +235,9 @@ def gap_statistics(X: ArrayLike, labels:ArrayLike, clusterer=None, n_repeat=10, 
 
     # Compute the gap statistic
     gap = np.mean(ref_disps) - orig_disp
-    gap_err = np.std(ref_disps) * np.sqrt(1 + 1/n_repeat)
-    
-    return {'gap': gap, 'gap_err': gap_err}
+    gap_err = np.std(ref_disps) * np.sqrt(1 + 1 / n_repeat)
+
+    return {"gap": gap, "gap_err": gap_err}
 
 
 def davies_bouldin_score(X: ArrayLike, labels: ArrayLike) -> float:
@@ -245,10 +246,9 @@ def davies_bouldin_score(X: ArrayLike, labels: ArrayLike) -> float:
     # if there is only one cluster, we cannot calculate Davies-Bouldin score
     if n_clusters == 1:
         return np.nan
-    
-    return dbs(
-        X, labels
-    )
+
+    return dbs(X, labels)
+
 
 def calinski_harabasz_score(X: ArrayLike, labels: ArrayLike) -> float:
     # how many clusters?
@@ -256,12 +256,13 @@ def calinski_harabasz_score(X: ArrayLike, labels: ArrayLike) -> float:
     # if there is only one cluster, we cannot calculate Calinski-Harabasz score
     if n_clusters == 1:
         return np.nan
-    
-    return chs(
-        X, labels
-    )
 
-def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = None) -> float:
+    return chs(X, labels)
+
+
+def hopkins_statistic(
+    X: ArrayLike, sample_ratio: float = 0.05, random_state=None
+) -> float:
     """
     Calculates the Hopkins statistic - a statistic which indicates the cluster tendency of data.
 
@@ -272,7 +273,7 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
 
     Returns:
     H (float): The Hopkins statistic, between 0 and 1. A value near 1 tends to indicate the data is highly clusterable.
-    
+
     Notes:
 
        - If the value of H is close to 1, then the data is highly clusterable, and not uniformly distributed. This means it's a good candidate for clustering.
@@ -283,9 +284,9 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
        - If 0.5 < H < 0.75, the data may have a tendency to cluster, but it's not clear.
        - If H < 0.5, the data is unlikely to have a meaningful cluster structure.
 
-    
+
     """
-    
+
     # reshape the data if it's 1-dimensional
     if len(X.shape) == 1:
         X = X.reshape(-1, 1)
@@ -293,7 +294,7 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
     # get the number of datapoints and dimension
     N, d = X.shape
 
-    # number of samples to take    
+    # number of samples to take
     n = int(sample_ratio * N)
 
     # set the random seed
@@ -303,13 +304,15 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
     samples = sample(X, size=n, replace=False)
 
     # Fit a nearest neighbor model to the data
-    nbrs = NearestNeighbors(n_neighbors=2, algorithm='brute').fit(X)
-    
+    nbrs = NearestNeighbors(n_neighbors=2, algorithm="brute").fit(X)
+
     # Calculate distance to nearest neighbor for each sample point
     sum_d = nbrs.kneighbors(samples, return_distance=True)[0].sum()
 
     # Generate n random points in the same dimensional space and calculate their distance to nearest neighbor
-    random_points = np.array([np.random.uniform(np.amin(X, axis=0), np.amax(X, axis=0)) for _ in range(n)])
+    random_points = np.array(
+        [np.random.uniform(np.amin(X, axis=0), np.amax(X, axis=0)) for _ in range(n)]
+    )
     sum_u = nbrs.kneighbors(random_points, return_distance=True)[0].sum()
 
     # Hopkins statistic
@@ -318,10 +321,13 @@ def hopkins_statistic(X: ArrayLike, sample_ratio: float = 0.05, random_state = N
     return H
 
 
- 
-
-def sample(X: np.ndarray, size: int, weights: Optional[np.ndarray] = None, 
-           replace: bool = True, random_state: int = None) -> np.ndarray:
+def sample(
+    X: np.ndarray,
+    size: int,
+    weights: Optional[np.ndarray] = None,
+    replace: bool = True,
+    random_state: int = None,
+) -> np.ndarray:
     """
     Sample from an array of values with or without replacement.
 
@@ -354,8 +360,10 @@ def sample(X: np.ndarray, size: int, weights: Optional[np.ndarray] = None,
 
     # Validate inputs
     if size > N and not replace:
-        raise ValueError("Cannot draw more samples than exist in X without replacement.")
-    
+        raise ValueError(
+            "Cannot draw more samples than exist in X without replacement."
+        )
+
     if weights is not None and len(weights) != N:
         raise ValueError("`weights` must be the same length as `X`.")
 
@@ -378,6 +386,7 @@ def sample(X: np.ndarray, size: int, weights: Optional[np.ndarray] = None,
 
     return samples
 
+
 def js_divergence(pdf1: np.ndarray, pdf2: np.ndarray, base=2) -> float:
     """
     Compute the Jensen-Shannon divergence of two probability density functions (PDFs).
@@ -396,40 +405,48 @@ def js_divergence(pdf1: np.ndarray, pdf2: np.ndarray, base=2) -> float:
     float
         The Jensen-Shannon divergence.
     """
-    
+
     # create a copy of the arrays
     pdf1 = pdf1.copy()
     pdf2 = pdf2.copy()
-    
+
     # Make sure PDFs sum to 1
     pdf1 /= np.sum(pdf1)
     pdf2 /= np.sum(pdf2)
-    
+
     # Compute the average distribution
     pdf_avg = 0.5 * (pdf1 + pdf2)
-    
+
     # Compute Jensen-Shannon divergence
-    js_divergence = 0.5 * (entropy(pdf1, pdf_avg, base=base) + entropy(pdf2, pdf_avg, base=base))
-    
+    js_divergence = 0.5 * (
+        entropy(pdf1, pdf_avg, base=base) + entropy(pdf2, pdf_avg, base=base)
+    )
+
     return js_divergence
 
-def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2, 
-                bandwidth_method: str='scott',
-                grid_size: int = 100, 
-                n_repeat: int = 1000, sample_ratio: float = 1.0,
-                weights1: Optional[np.ndarray] = None, 
-                weights2: Optional[np.ndarray] = None, 
-                random_state: Optional[int] = None) -> Tuple[float, float]:
+
+def jensen_shannon_distance(
+    X1: np.ndarray,
+    X2: np.ndarray,
+    base: int = 2,
+    bandwidth_method: str = "scott",
+    grid_size: int = 100,
+    n_repeat: int = 1000,
+    sample_ratio: float = 1.0,
+    weights1: Optional[np.ndarray] = None,
+    weights2: Optional[np.ndarray] = None,
+    random_state: Optional[int] = None,
+) -> Tuple[float, float]:
     """
     Compute the Jensen-Shannon distance (JSD) between two data sets with bootstrapping.
 
-    The JSD is a symmetrical and finite measure of the similarity between two probability distributions. 
-    It is derived from the Kullback-Leibler Divergence (KLD), a measure of how one probability distribution 
-    diverges from a second, expected probability distribution. Unlike KLD, JSD is symmetrical, giving the 
+    The JSD is a symmetrical and finite measure of the similarity between two probability distributions.
+    It is derived from the Kullback-Leibler Divergence (KLD), a measure of how one probability distribution
+    diverges from a second, expected probability distribution. Unlike KLD, JSD is symmetrical, giving the
     same value for JSD(P||Q) and JSD(Q||P), where P and Q are the two distributions being compared.
 
-    A JSD value of 0 indicates that the distributions are identical. Higher values indicate that the 
-    distributions are more different from each other. The maximum value of JSD is log2 (for base=2), 
+    A JSD value of 0 indicates that the distributions are identical. Higher values indicate that the
+    distributions are more different from each other. The maximum value of JSD is log2 (for base=2),
     which occurs when the two distributions are mutually singular.
 
     Parameters
@@ -460,7 +477,7 @@ def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2,
     tuple of float
         The mean and standard deviation of the Jensen-Shannon distances between `X1` and `X2`.
     """
-    
+
     # reshape the data if it's 1-dimensional
     if len(X1.shape) == 1:
         X1 = X1.reshape(-1, 1)
@@ -474,10 +491,12 @@ def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2,
     # Determine the number of bootstrap samples to generate for each array
     n_samples1 = int(sample_ratio * N1)
     n_samples2 = int(sample_ratio * N2)
-    
+
     # Create a range over which to evaluate the PDFs
-    x_range = np.linspace(min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=grid_size)
-    
+    x_range = np.linspace(
+        min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=grid_size
+    )
+
     # set random state
     np.random.seed(random_state)
 
@@ -485,8 +504,7 @@ def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2,
     distances = []
 
     # Generate bootstrap samples and calculate JSD for each
-    for _ in range(n_repeat):   
-
+    for _ in range(n_repeat):
         # Sample from each array with replacement
         sample1 = sample(X1, size=n_samples1, weights=weights1)
         sample2 = sample(X2, size=n_samples2, weights=weights2)
@@ -494,7 +512,7 @@ def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2,
         # Estimate PDFs of samples
         pdf1 = gaussian_kde(sample1.ravel(), bw_method=bandwidth_method)(x_range)
         pdf2 = gaussian_kde(sample2.ravel(), bw_method=bandwidth_method)(x_range)
-    
+
         # Calculate JS-Divergence
         js_div = js_divergence(pdf1, pdf2, base=base)
         # Calculate JS-Distance
@@ -505,12 +523,13 @@ def jensen_shannon_distance(X1: np.ndarray, X2: np.ndarray, base: int =2,
     # Calculate the mean and standard deviation of the distances
     jsd_mean = np.mean(distances)
     jsd_std = np.std(distances)
-    
+
     return jsd_mean, jsd_std
 
 
-
-def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_iter: int = 1000000) -> float:
+def wasserstein_distance(
+    X1: ArrayLike, X2: ArrayLike, random_state=None, max_iter: int = 1000000
+) -> float:
     """
     Compute the Wasserstein distance between two multi-dimensional distributions.
 
@@ -531,7 +550,7 @@ def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_it
     Returns
     -------
     distance : float
-        The computed square root of the Wasserstein distance (i.e., the actual Wasserstein distance) 
+        The computed square root of the Wasserstein distance (i.e., the actual Wasserstein distance)
         between the two input distributions.
 
     Notes
@@ -540,14 +559,14 @@ def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_it
     cost that is enough to transform one distribution into the other. Cost is measured in the amount of distribution
     weight that must be moved and the distance it has to be moved.
 
-    The Wasserstein distance takes values from 0 to +inf. The value is 0 if and only if the distributions are equal. 
+    The Wasserstein distance takes values from 0 to +inf. The value is 0 if and only if the distributions are equal.
     Larger values indicate that more cost is required to transform one distribution into the other, meaning the distributions
     are more different.
 
-    This function computes the Wasserstein distance in a multidimensional space. It uses the Python Optimal Transport (POT) 
+    This function computes the Wasserstein distance in a multidimensional space. It uses the Python Optimal Transport (POT)
     library to do so.
     """
- 
+
     # if X1 and X2 are 1-dimensional, reshape them to 2-dimensional
     if len(X1.shape) == 1:
         X1 = X1.reshape(-1, 1)
@@ -562,10 +581,10 @@ def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_it
     np.random.seed(random_state)
 
     # Compute a uniform distribution over the samples
-    a, b = np.ones((X1.shape[0],))/X1.shape[0], np.ones((X2.shape[0],))/X2.shape[0]
+    a, b = np.ones((X1.shape[0],)) / X1.shape[0], np.ones((X2.shape[0],)) / X2.shape[0]
 
     # Compute the cost matrix (Euclidean distance in this case)
-    M = ot.dist(X1, X2, metric='sqeuclidean')
+    M = ot.dist(X1, X2, metric="sqeuclidean")
 
     # Compute the Wasserstein distance
     wasserstein_distance = ot.emd2(a, b, M, numItermax=max_iter)
@@ -576,7 +595,7 @@ def wasserstein_distance(X1: ArrayLike, X2: ArrayLike, random_state=None, max_it
     return wasserstein_distance
 
 
-def normalize_wasserstein_distance(d: float, scale: float=1.0) -> float:
+def normalize_wasserstein_distance(d: float, scale: float = 1.0) -> float:
     """
     Normalize a Wasserstein distance to a value between 0 and 1 using a sigmoid function.
 
