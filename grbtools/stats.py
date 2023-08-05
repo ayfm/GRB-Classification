@@ -429,16 +429,11 @@ def jensen_shannon_distance(
     X1: np.ndarray,
     X2: np.ndarray,
     base: int = 2,
-    bandwidth_method: str = "scott",
+    bandwidth_method: Literal["scott", "silverman"] = "scott",
     grid_size: int = 100,
-    n_repeat: int = 1000,
-    sample_ratio: float = 1.0,
-    weights1: Optional[np.ndarray] = None,
-    weights2: Optional[np.ndarray] = None,
-    random_state: Optional[int] = None,
-) -> Tuple[float, float]:
+):
     """
-    Compute the Jensen-Shannon distance (JSD) between two data sets with bootstrapping.
+    Compute the Jensen-Shannon distance (JSD) between two data sets.
 
     The JSD is a symmetrical and finite measure of the similarity between two probability distributions.
     It is derived from the Kullback-Leibler Divergence (KLD), a measure of how one probability distribution
@@ -448,6 +443,68 @@ def jensen_shannon_distance(
     A JSD value of 0 indicates that the distributions are identical. Higher values indicate that the
     distributions are more different from each other. The maximum value of JSD is log2 (for base=2),
     which occurs when the two distributions are mutually singular.
+
+    Parameters
+    ----------
+    X1 : array-like
+        First data set.
+    X2 : array-like
+        Second data set.
+    base : float, optional
+        The logarithmic base to use, defaults to `e` (natural logarithm).
+    bandwidth_method : str, optional
+        The method used to calculate the bandwidth for the KDE, defaults to 'scott'.
+    grid_size : int, optional
+        Number of points where the PDFs are evaluated, defaults to 100.
+
+    Returns
+    -------
+    jsd : float
+        The Jensen-Shannon distance between `X1` and `X2`.
+    """
+
+    # reshape the data if it's 1-dimensional
+    if len(X1.shape) == 1:
+        X1 = X1.reshape(-1, 1)
+    if len(X2.shape) == 1:
+        X2 = X2.reshape(-1, 1)
+
+    # get size of each array
+    N1 = len(X1)
+    N2 = len(X2)
+
+    # Create a range over which to evaluate the PDFs
+    x_range = np.linspace(
+        min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=grid_size
+    )
+
+    # Estimate PDFs of X1 and X2
+    pdf1 = gaussian_kde(X1.ravel(), bw_method=bandwidth_method)(x_range)
+    pdf2 = gaussian_kde(X2.ravel(), bw_method=bandwidth_method)(x_range)
+
+    # Compute Jensen-Shannon divergence
+    js_div = js_divergence(pdf1, pdf2, base=base)
+
+    # Compute Jensen-Shannon distance
+    js_distance = np.sqrt(js_div)
+
+    return js_distance
+
+
+def jensen_shannon_distance_bootstrap(
+    X1: np.ndarray,
+    X2: np.ndarray,
+    base: int = 2,
+    bandwidth_method: Literal["scott", "silverman"] = "scott",
+    grid_size: int = 100,
+    n_repeat: int = 1000,
+    sample_ratio: float = 1.0,
+    weights1: Optional[np.ndarray] = None,
+    weights2: Optional[np.ndarray] = None,
+    random_state: Optional[int] = None,
+) -> Tuple[float, float]:
+    """
+    Compute the Jensen-Shannon distance (JSD) between two data sets with bootstrapping.
 
     Parameters
     ----------
@@ -492,11 +549,6 @@ def jensen_shannon_distance(
     n_samples1 = int(sample_ratio * N1)
     n_samples2 = int(sample_ratio * N2)
 
-    # Create a range over which to evaluate the PDFs
-    x_range = np.linspace(
-        min(np.min(X1), np.min(X2)), max(np.max(X1), np.max(X2)), num=grid_size
-    )
-
     # set random state
     np.random.seed(random_state)
 
@@ -506,17 +558,17 @@ def jensen_shannon_distance(
     # Generate bootstrap samples and calculate JSD for each
     for _ in range(n_repeat):
         # Sample from each array with replacement
-        sample1 = sample(X1, size=n_samples1, weights=weights1)
-        sample2 = sample(X2, size=n_samples2, weights=weights2)
+        sample1 = sample(X1, size=n_samples1, replace=True, weights=weights1)
+        sample2 = sample(X2, size=n_samples2, replace=True, weights=weights2)
 
-        # Estimate PDFs of samples
-        pdf1 = gaussian_kde(sample1.ravel(), bw_method=bandwidth_method)(x_range)
-        pdf2 = gaussian_kde(sample2.ravel(), bw_method=bandwidth_method)(x_range)
-
-        # Calculate JS-Divergence
-        js_div = js_divergence(pdf1, pdf2, base=base)
         # Calculate JS-Distance
-        js_dist = np.sqrt(js_div)
+        js_dist = jensen_shannon_distance(
+            sample1,
+            sample2,
+            base=base,
+            bandwidth_method=bandwidth_method,
+            grid_size=grid_size,
+        )
         # store the distance
         distances.append(js_dist)
 
