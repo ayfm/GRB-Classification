@@ -241,7 +241,7 @@ def gap_statistics(
     X: np.ndarray,
     labels: np.ndarray,
     clusterer=None,
-    n_repeat: int = 10,
+    n_repeat: int = 100,
     random_state=None,
 ) -> Dict:
     """
