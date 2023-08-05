@@ -3,7 +3,6 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 
 import numpy as np
 import ot
-from numpy.typing import ArrayLike
 from scipy.spatial.distance import cdist
 from scipy.stats import entropy, gaussian_kde
 from sklearn.cluster import KMeans
@@ -15,12 +14,12 @@ from sklearn.neighbors import NearestNeighbors
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
 
-def _set_seed(seed: Optional[int] = None) -> None:
+def _set_seed(seed: Union[int, None]) -> None:
     """
     Set the seed for numpy's random number generator.
 
     Args:
-        seed (Optional[int], optional): Seed to use. If None, no seed is set. Defaults to None.
+        seed (int or None): Seed to use. If None, no seed is set.
     """
 
     # set seed if given
@@ -29,21 +28,21 @@ def _set_seed(seed: Optional[int] = None) -> None:
 
 
 def compute_mahalanobis_distance(
-    X: ArrayLike,
-    mean: Union[ArrayLike, None] = None,
-    covar: Union[ArrayLike, None] = None,
-) -> ArrayLike:
+    X: np.ndarray,
+    mean: Union[np.ndarray, None] = None,
+    covar: Union[np.ndarray, None] = None,
+) -> np.ndarray:
     """
     Calculates the Mahalanobis distance between data points and means.
 
     Args:
-        X (ArrayLike): Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
-        mean (Union[ArrayLike, None], optional): Mean values to use for computing the distance. If None, the mean will be calculated from the input data. Defaults to None.
-        covar (Union[ArrayLike, None], optional): Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated from the input data. Defaults to None.
+        X (np.ndarray): Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
+        mean (Union[np.ndarray, None], optional): Mean values to use for computing the distance. If None, the mean will be calculated from the input data. Defaults to None.
+        covar (Union[np.ndarray, None], optional): Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated from the input data. Defaults to None.
 
     Returns:
-        np.ndarray: Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
-
+         np.ndarray: Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
+    
     Raises:
         AssertionError: If the shape of the mean or covariance matrix is not correct.
 
@@ -80,28 +79,27 @@ def compute_mahalanobis_distance(
 
 
 def silhouette_samples_mahalanobis(
-    X: ArrayLike,
-    labels: ArrayLike,
-    means: Union[ArrayLike, None] = None,
-    covars: Union[ArrayLike, None] = None,
-) -> ArrayLike:
+    X: np.ndarray,
+    labels: np.ndarray,
+    means: Union[np.ndarray, None] = None,
+    covars: Union[np.ndarray, None] = None,
+) -> np.ndarray:
     """
     Calculate the Mahalanobis-based silhouette coefficients for clustered data.
 
     Parameters:
-        X (ArrayLike): Input data array of shape (N, d), where N is the number of samples and d is the number of features.
-        labels (ArrayLike): Array of cluster assignments for each data point, of shape (N,).
-        means (Union[ArrayLike, None], optional): Cluster mean vectors. If None, they will be calculated from the data.
+        X (np.ndarray): Input data array of shape (N, d), where N is the number of samples and d is the number of features.
+        labels (np.ndarray): Array of cluster assignments for each data point, of shape (N,).
+        means (Union[np.ndarray, None], optional): Cluster mean vectors. If None, they will be calculated from the data.
             Must have shape (n_clusters, d), where n_clusters is the number of clusters.
-        covars (Union[ArrayLike, None], optional): Cluster covariance matrices. If None, they will be calculated from the data.
+        covars (Union[np.ndarray, None], optional): Cluster covariance matrices. If None, they will be calculated from the data.
             Must have shape (n_clusters, d, d), where n_clusters is the number of clusters.
 
     Returns:
-        np.ndarray: Array of silhouette coefficients for each data point, of shape (N, 1).
-
+        np.ndarray: Array of silhouette coefficients for each data point, of shape (N, 1).    
+    
     Raises:
         AssertionError: If the dimensions of means or covars are incorrect.
-
     """
 
     # get unique labels
@@ -159,8 +157,8 @@ def silhouette_samples_mahalanobis(
 
 
 def silhouette_score(
-    X: ArrayLike, labels: ArrayLike, metric: Literal["Euclidean", "Mahalanobis"] = None
-):
+    X: np.ndarray, labels: np.ndarray, metric: Literal["Euclidean", "Mahalanobis"] = None
+) -> Dict:
     """
     Calculates the silhouette score for a clustering.
 
@@ -168,12 +166,14 @@ def silhouette_score(
     It provides an indication of the quality of the clustering results.
 
     Args:
-        X (ArrayLike): The input data samples.
-        labels (ArrayLike): The cluster labels assigned to each sample.
+        X (np.ndarray): The input data samples.
+        labels (np.ndarray): The cluster labels assigned to each sample.
         metric ({"Euclidean", "Mahalanobis"}, optional): The distance metric to be used. Defaults to "Euclidean".
 
     Returns:
-        Dict: A dict containing the mean silhouette coefficient and an array of sample silhouette coefficients.
+        Dict: 
+            'mean: the mean silhouette coefficient over all samples.
+            'coeffs': is an array of sample silhouette coefficients.
 
     Raises:
         ValueError: If the metric is not one of {"Euclidean", "Mahalanobis"}.
@@ -219,9 +219,10 @@ def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
     
     Returns
     -------
-    dispersion : float
+    float: 
         The total intra-cluster dispersion for the given data and labels. This is the sum of the squared distances of each
         point to the centroid of its assigned cluster.
+        
     """
     clusters = np.unique(labels)
     dispersion = 0
@@ -229,12 +230,13 @@ def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
         cluster_points = X[labels == cluster]
         centroid = cluster_points.mean(axis=0)
         dispersion += ((cluster_points - centroid) ** 2).sum()
+    
     return dispersion
 
 
 def gap_statistics(
     X: np.ndarray, labels: np.ndarray, clusterer=None, n_repeat:int = 10, random_state=None
-) -> Dict[str, float]:
+) -> Dict:
     """
     Compute the gap statistic for the given data and labels.
     
@@ -270,11 +272,11 @@ def gap_statistics(
 
     Returns
     -------
-    gap_dict : dict
-        A dictionary with two keys. The 'gap' key corresponds to the gap statistic: the log of the average dispersion of 
-        the reference datasets minus the log dispersion of the input data. The 'gap_err' key corresponds to the standard 
-        deviation of the gap statistic, scaled by a factor sqrt(1 + 1/n_repeat).
+    Dict : dict
+        'gap': (float) The log of the average dispersion of the reference datasets minus the log dispersion of the input data.
+        'err': (float) The standard deviation of the gap statistic, scaled by a factor sqrt(1 + 1/n_repeat).
     """
+    
     # if clusterer is not specified, use KMeans with the same number of clusters as the labels
     if clusterer is None:
         clusterer = KMeans(n_clusters=len(np.unique(labels)))
@@ -307,11 +309,11 @@ def gap_statistics(
     gap = np.mean(ref_disps) - orig_disp
     gap_err = np.std(ref_disps) * np.sqrt(1 + 1 / n_repeat)
 
-    return {"gap": gap, "gap_err": gap_err}
+    return {"gap": gap, "err": gap_err}
  
 
 
-def davies_bouldin_score(X: ArrayLike, labels: ArrayLike) -> float:
+def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     # how many clusters?
     n_clusters = len(set(labels))
     # if there is only one cluster, we cannot calculate Davies-Bouldin score
@@ -321,7 +323,7 @@ def davies_bouldin_score(X: ArrayLike, labels: ArrayLike) -> float:
     return dbs(X, labels)
 
 
-def calinski_harabasz_score(X: ArrayLike, labels: ArrayLike) -> float:
+def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
     # how many clusters?
     n_clusters = len(set(labels))
     # if there is only one cluster, we cannot calculate Calinski-Harabasz score
@@ -332,13 +334,13 @@ def calinski_harabasz_score(X: ArrayLike, labels: ArrayLike) -> float:
 
 
 def hopkins_statistic(
-    X: ArrayLike, sample_ratio: float = 0.05, random_state=None
+    X: np.ndarray, sample_ratio: float = 0.05, random_state=None
 ) -> float:
     """
     Calculates the Hopkins statistic - a statistic which indicates the cluster tendency of data.
 
     Parameters:
-    X (ArrayLike): The dataset.
+    X (np.ndarray): The dataset.
     sample_ratio (float): The ratio of datapoints to sample for calculating the statistic.
     random_state (int): The random seed for sampling.
 
@@ -354,8 +356,6 @@ def hopkins_statistic(
        - If H > 0.75, the data is considered to have a high tendency to cluster.
        - If 0.5 < H < 0.75, the data may have a tendency to cluster, but it's not clear.
        - If H < 0.5, the data is unlikely to have a meaningful cluster structure.
-
-
     """
 
     # reshape the data if it's 1-dimensional
@@ -394,7 +394,7 @@ def hopkins_statistic(
 
 def sample(
     X: np.ndarray,
-    size: int,
+    size: Optional[int] = None,
     weights: Optional[np.ndarray] = None,
     replace: bool = True,
     random_state: int = None,
@@ -407,7 +407,7 @@ def sample(
     X : np.ndarray
         Array of values to sample from.
     size : int
-        Number of samples to draw.
+        Number of samples to draw. If None, an array of len(X) is returned.
     weights : np.ndarray, optional
         Weights associated with each value in `X`. If None, all values are equally likely to be drawn.
     replace : bool, optional
@@ -428,6 +428,10 @@ def sample(
 
     # get the length of X
     N = len(X)
+
+    # if size is None, update it to be the length of X
+    if size is None:
+        size = N
 
     # Validate inputs
     if size > N and not replace:
@@ -572,7 +576,7 @@ def jensen_shannon_distance_bootstrap(
     weights1: Optional[np.ndarray] = None,
     weights2: Optional[np.ndarray] = None,
     random_state: Optional[int] = None,
-) -> Tuple[float, float]:
+) -> Dict:
     """
     Compute the Jensen-Shannon distance (JSD) between two data sets with bootstrapping.
 
@@ -601,8 +605,9 @@ def jensen_shannon_distance_bootstrap(
 
     Returns
     -------
-    tuple of float
-        The mean and standard deviation of the Jensen-Shannon distances between `X1` and `X2`.
+    Dict:
+        'mean': float - The mean of the Jensen-Shannon distances between `X1` and `X2`.
+        'std': float - The standard deviation of the Jensen-Shannon distances between `X1` and `X2`.
     """
 
     # reshape the data if it's 1-dimensional
@@ -646,11 +651,11 @@ def jensen_shannon_distance_bootstrap(
     jsd_mean = np.mean(distances)
     jsd_std = np.std(distances)
 
-    return jsd_mean, jsd_std
+    return {"mean": jsd_mean, "std": jsd_std}
 
 
 def wasserstein_distance(
-    X1: ArrayLike, X2: ArrayLike, max_iter: int = 1000000, random_state=None
+    X1: np.ndarray, X2: np.ndarray, max_iter: int = 1000000, random_state=None
 ) -> float:
     """
     Compute the Wasserstein distance between two multi-dimensional distributions.
@@ -747,7 +752,7 @@ def wasserstein_distance_bootstrap(
     weights1: Optional[np.ndarray] = None,
     weights2: Optional[np.ndarray] = None,
     random_state: int = None,
-) -> Tuple[float, float]:
+) -> Dict:
     """
     Compute the Wasserstein distance between two multi-dimensional distributions with bootstrapping.
 
@@ -773,10 +778,9 @@ def wasserstein_distance_bootstrap(
     
     Returns
     -------
-    mean_distance : float
-        The mean Wasserstein distance calculated over the bootstrap samples.
-    std_distance : float
-        The standard deviation of the Wasserstein distances calculated over the bootstrap samples.
+    Dict:
+        'mean': (float) The mean Wasserstein distance calculated over the bootstrap samples.
+        'std' : (float) The standard deviation of the Wasserstein distances calculated over the bootstrap samples.
     """
 
     # Ensure the arrays are 2D
@@ -817,4 +821,4 @@ def wasserstein_distance_bootstrap(
     mean_distance = np.mean(distances)
     std_distance = np.std(distances)
 
-    return mean_distance, std_distance
+    return {"mean": mean_distance, "std": std_distance}
