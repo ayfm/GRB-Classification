@@ -15,6 +15,18 @@ from sklearn.neighbors import NearestNeighbors
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
 
+def _set_seed(seed: Optional[int] = None) -> None:
+    """
+    Set the seed for numpy's random number generator.
+
+    Args:
+        seed (Optional[int], optional): Seed to use. If None, no seed is set. Defaults to None.
+    """
+
+    # set seed if given
+    if seed is not None:
+        np.random.seed(seed)
+
 def compute_mahalanobis_distance(
     X: ArrayLike,
     mean: Union[ArrayLike, None] = None,
@@ -216,7 +228,7 @@ def gap_statistics(
     ref_disps = np.zeros(n_repeat)
 
     # set the random state
-    np.random.seed(random_state)
+    _set_seed(random_state)
 
     for i in range(n_repeat):
         # Generate a reference dataset
@@ -297,8 +309,8 @@ def hopkins_statistic(
     # number of samples to take
     n = int(sample_ratio * N)
 
-    # set the random seed
-    np.random.seed(random_state)
+    # set the random state
+    _set_seed(random_state)
 
     # randomly sample n datapoints
     samples = sample(X, size=n, replace=False)
@@ -374,9 +386,8 @@ def sample(
     # Normalize weights
     weights /= np.sum(weights)
 
-    # Set random state if provided
-    if random_state is not None:
-        np.random.seed(random_state)
+    # set the random state
+    _set_seed(random_state)
 
     # Sample indices
     idx = np.random.choice(N, size=size, p=weights, replace=replace)
@@ -549,8 +560,8 @@ def jensen_shannon_distance_bootstrap(
     n_samples1 = int(sample_ratio * N1)
     n_samples2 = int(sample_ratio * N2)
 
-    # set random state
-    np.random.seed(random_state)
+    # set the random state
+    _set_seed(random_state)
 
     # Store the calculated distances
     distances = []
@@ -580,7 +591,7 @@ def jensen_shannon_distance_bootstrap(
 
 
 def wasserstein_distance(
-    X1: ArrayLike, X2: ArrayLike, random_state=None, max_iter: int = 1000000
+    X1: ArrayLike, X2: ArrayLike, max_iter: int = 1000000, random_state=None
 ) -> float:
     """
     Compute the Wasserstein distance between two multi-dimensional distributions.
@@ -629,8 +640,8 @@ def wasserstein_distance(
     if X1.shape[1] != X2.shape[1]:
         raise ValueError("X1 and X2 must have the same number of dimensions.")
 
-    # set the random seed
-    np.random.seed(random_state)
+    # set the random state
+    _set_seed(random_state)
 
     # Compute a uniform distribution over the samples
     a, b = np.ones((X1.shape[0],)) / X1.shape[0], np.ones((X2.shape[0],)) / X2.shape[0]
@@ -666,3 +677,4 @@ def normalize_wasserstein_distance(d: float, scale: float = 1.0) -> float:
         The normalized distance.
     """
     return 1 / (1 + np.exp(-d * scale))
+
