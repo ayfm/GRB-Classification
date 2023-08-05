@@ -5,6 +5,7 @@ import numpy as np
 import ot
 from scipy.spatial.distance import cdist
 from scipy.stats import entropy, gaussian_kde
+from scipy.stats import shapiro, kstest, anderson, normaltest
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
@@ -42,7 +43,7 @@ def compute_mahalanobis_distance(
 
     Returns:
          np.ndarray: Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
-    
+
     Raises:
         AssertionError: If the shape of the mean or covariance matrix is not correct.
 
@@ -96,8 +97,8 @@ def silhouette_samples_mahalanobis(
             Must have shape (n_clusters, d, d), where n_clusters is the number of clusters.
 
     Returns:
-        np.ndarray: Array of silhouette coefficients for each data point, of shape (N, 1).    
-    
+        np.ndarray: Array of silhouette coefficients for each data point, of shape (N, 1).
+
     Raises:
         AssertionError: If the dimensions of means or covars are incorrect.
     """
@@ -157,7 +158,9 @@ def silhouette_samples_mahalanobis(
 
 
 def silhouette_score(
-    X: np.ndarray, labels: np.ndarray, metric: Literal["Euclidean", "Mahalanobis"] = None
+    X: np.ndarray,
+    labels: np.ndarray,
+    metric: Literal["Euclidean", "Mahalanobis"] = None,
 ) -> Dict:
     """
     Calculates the silhouette score for a clustering.
@@ -171,7 +174,7 @@ def silhouette_score(
         metric ({"Euclidean", "Mahalanobis"}, optional): The distance metric to be used. Defaults to "Euclidean".
 
     Returns:
-        Dict: 
+        Dict:
             'mean: the mean silhouette coefficient over all samples.
             'coeffs': is an array of sample silhouette coefficients.
 
@@ -208,21 +211,21 @@ def silhouette_score(
 def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
     """
     Compute the total intra-cluster dispersion for the given data and labels.
-    
+
     Parameters
     ----------
     X : np.ndarray, shape = [n_samples, n_features]
         The input samples. Each row corresponds to a sample, and each column corresponds to a feature of the sample.
-    
+
     labels : np.ndarray, shape = [n_samples]
         The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
-    
+
     Returns
     -------
-    float: 
+    float:
         The total intra-cluster dispersion for the given data and labels. This is the sum of the squared distances of each
         point to the centroid of its assigned cluster.
-        
+
     """
     clusters = np.unique(labels)
     dispersion = 0
@@ -230,44 +233,48 @@ def dispersion(X: np.ndarray, labels: np.ndarray) -> float:
         cluster_points = X[labels == cluster]
         centroid = cluster_points.mean(axis=0)
         dispersion += ((cluster_points - centroid) ** 2).sum()
-    
+
     return dispersion
 
 
 def gap_statistics(
-    X: np.ndarray, labels: np.ndarray, clusterer=None, n_repeat:int = 10, random_state=None
+    X: np.ndarray,
+    labels: np.ndarray,
+    clusterer=None,
+    n_repeat: int = 10,
+    random_state=None,
 ) -> Dict:
     """
     Compute the gap statistic for the given data and labels.
-    
-    The gap statistic compares the total intra-cluster dispersion of the input data to that of a reference dataset 
+
+    The gap statistic compares the total intra-cluster dispersion of the input data to that of a reference dataset
     generated from a uniform distribution with the same range as the input data.
 
-    A higher gap value indicates that the clustering structure in the input data is stronger relative to a 
-    random distribution, while a lower (including negative) gap value suggests that the clustering structure in the 
+    A higher gap value indicates that the clustering structure in the input data is stronger relative to a
+    random distribution, while a lower (including negative) gap value suggests that the clustering structure in the
     input data is not significantly different from a random distribution.
-    
-    The gap value theoretically ranges from negative infinity (when the clustering structure of the input data is significantly 
-    worse than the random reference data) to positive infinity (when the clustering structure of the input data is 
-    significantly better than the random reference data). In practice, a negative gap value would typically suggest 
+
+    The gap value theoretically ranges from negative infinity (when the clustering structure of the input data is significantly
+    worse than the random reference data) to positive infinity (when the clustering structure of the input data is
+    significantly better than the random reference data). In practice, a negative gap value would typically suggest
     no meaningful clustering structure in the input data.
-    
+
     Parameters
     ----------
     X : np.ndarray, shape = [n_samples, n_features]
         The input samples. Each row corresponds to a sample, and each column corresponds to a feature of the sample.
-    
+
     labels : np.ndarray, shape = [n_samples]
         The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
-        
+
     clusterer : estimator object implementing 'fit_predict'
         The clusterer to use for the data. If `None`, `KMeans` with the same number of clusters as the labels will be used.
-        
+
     n_repeat : int, optional
         Number of times to generate a reference dataset and compute its dispersion. Default is 10.
-        
+
     random_state : int or None, optional
-        Determines random number generation for dataset creation. Pass an int for reproducible output across multiple 
+        Determines random number generation for dataset creation. Pass an int for reproducible output across multiple
         function calls. If None, the random number generator is the RandomState instance used by np.random. Default is None.
 
     Returns
@@ -276,7 +283,7 @@ def gap_statistics(
         'gap': (float) The log of the average dispersion of the reference datasets minus the log dispersion of the input data.
         'err': (float) The standard deviation of the gap statistic, scaled by a factor sqrt(1 + 1/n_repeat).
     """
-    
+
     # if clusterer is not specified, use KMeans with the same number of clusters as the labels
     if clusterer is None:
         clusterer = KMeans(n_clusters=len(np.unique(labels)))
@@ -310,18 +317,17 @@ def gap_statistics(
     gap_err = np.std(ref_disps) * np.sqrt(1 + 1 / n_repeat)
 
     return {"gap": gap, "err": gap_err}
- 
 
 
 def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     """
     Compute the Davies-Bouldin score for a clustering result.
-    
-    The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity' 
-    between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances. 
+
+    The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity'
+    between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances.
     Thus, clusters which are farther apart and less dispersed will result in a better score.
-    
-    The minimum score is 0, with smaller values indicating better clustering. 
+
+    The minimum score is 0, with smaller values indicating better clustering.
     The maximum score is unbounded, with larger values indicating worse clustering.
     The DBI is undefined for a single cluster.
 
@@ -329,7 +335,7 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     ----------
     X : array-like, shape = [n_samples, n_dimensions]
         Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
-    
+
     labels : array-like, shape = [n_samples]
         Cluster labels for each sample in the input data.
 
@@ -346,15 +352,16 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
 
     return dbs(X, labels)
 
+
 def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
     """
     Compute the Calinski-Harabasz score for a clustering result.
-    
-    The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of 
-    between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering. 
+
+    The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of
+    between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering.
     The CHI is undefined for a single cluster.
-    
-    Theoretically, the Calinski-Harabasz index can be infinitely large but in practice it's usually within a 
+
+    Theoretically, the Calinski-Harabasz index can be infinitely large but in practice it's usually within a
     finite range. The score is higher when clusters are dense and well separated.
     The lower bound is 0, with lower values indicating worse clustering.
     The upper bound is unbounded, with larger values indicating better clustering.
@@ -363,7 +370,7 @@ def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
     ----------
     X : array-like, shape = [n_samples, n_dimensions]
         Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
-    
+
     labels : array-like, shape = [n_samples]
         Cluster labels for each sample in the input data.
 
@@ -823,7 +830,7 @@ def wasserstein_distance_bootstrap(
     random_state : int or None, optional
         If int, random_state is the seed used by the random number generator;
         If None, the random number generator is the RandomState instance used by np.random. Default is None.
-    
+
     Returns
     -------
     Dict:
@@ -870,3 +877,234 @@ def wasserstein_distance_bootstrap(
     std_distance = np.std(distances)
 
     return {"mean": mean_distance, "std": std_distance}
+
+
+def normality_test_shapiro_wilkinson(X: np.ndarray, alpha: float = 0.05) -> Dict:
+    """
+    Perform a Shapiro-Wilkinson test for normality on the input data.
+    This test is relatively powerful with small samples.
+    You can use it when sample size is small (n <= 50)
+
+    HO: the sample is drawn from a normal distribution
+
+    if p-value < alpha: reject H0
+
+    Returns
+    -------
+        Dict:
+            'stat': (float) The test statistic.
+            'p' : (float) The p-value for the test.
+    """
+    stat, p = shapiro(X)
+
+    print("::: Shapiro-Wilkinson Normality Test:::")
+    print("  > Statistics=%.3f, p=%.3f' % (stat, p)")
+    if p > alpha:
+        print("Sample looks Gaussian (fail to reject H0)")
+    else:
+        print("Sample does not look Gaussian (reject H0)")
+
+    return stat, p
+
+
+def normality_test_shapiro_wilkinson(
+    X: np.ndarray, alpha: float = 0.05
+) -> Dict[str, float]:
+    """
+    Perform a Shapiro-Wilkinson test for normality on the input data.
+
+    This test checks the null hypothesis that the data was drawn from a normal distribution. It is a good choice
+    for testing normality when the sample size is small (n <= 50) as it has been shown to have good power performance
+    for such sample sizes. However, for larger sample sizes (n > 2000), the test may be too sensitive.
+
+    HO: the sample is drawn from a normal distribution.
+    if p-value < alpha: the null hypothesis is rejected.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The array containing the sample to be tested.
+
+    alpha : float, default=0.05
+        Significance level for the test.
+
+    Returns
+    -------
+    dict
+        A dictionary with keys 'stat' and 'p'.
+        'stat' is the calculated test statistic and 'p' is the associated p-value from the test.
+
+    Notes
+    ----
+    - Works well for small sample sizes (n < 50), but can also handle larger sample sizes.
+    - It has been found to have the best power for a given significance, effectively determining whether the data being tested are normally distributed.
+    - Shapiro-Wilk has the limitation that it is designed specifically for testing normality.
+    """
+
+    stat, p = shapiro(X)
+
+    print("::: Shapiro-Wilkinson Normality Test :::")
+    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    if p > alpha:
+        print("  > Sample looks Gaussian (fail to reject H0)")
+    else:
+        print("  > Sample does not look Gaussian (reject H0)")
+
+    return {"stat": stat, "p": p}
+
+
+def normality_test_ks(
+    X: np.ndarray, alpha: float = 0.05, normalization: bool = False
+) -> Dict[str, float]:
+    """
+    Perform a Kolmogorov-Smirnov test for normality on the input data.
+
+    This test checks the null hypothesis that the data was drawn from a normal distribution. The K-S test has the advantage
+    of making no assumption about the distribution of data.
+
+    However, one should be cautious while using K-S Test. The D statistic is sensitive towards the centre of the distribution and
+    may not detect deviations at the tails. Moreover, compared to other tests, it may have less power, i.e., it is less likely
+    to reject the null hypothesis when it is false (Type II error).
+
+    HO: the sample is drawn from a normal distribution.
+    if p-value < alpha: the null hypothesis is rejected.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The array containing the sample to be tested.
+
+    alpha : float, default=0.05
+        Significance level for the test. If the p-value is less than alpha, the null hypothesis is rejected.
+
+    normalization : bool, default=False
+        If True, the data is normalized before the test is performed. This is recommended when the data is not normally distributed.
+
+    Returns
+    -------
+    dict
+        A dictionary with keys 'stat' and 'p'.
+        'stat' is the calculated test statistic and 'p' is the associated p-value from the test.
+
+    Notes
+    ----
+    - Use when comparing a sample with a reference probability distribution (one-sample K-S test), or when comparing two samples (two-sample K-S test).
+    - It is a non-parametric test which can be applied to any continuous distribution.
+    - Has the advantage of making no assumption about the distribution of data.
+    - Less sensitive around the mean as compared to the tails.
+    """
+
+    # normalize the data if required
+    if normalization:
+        X_ = (X - np.mean(X)) / np.std(X)
+    else:
+        X_ = X.copy()
+
+    # test
+    stat, p = kstest(X_, "norm")
+
+    print("::: Kolmogorov-Smirnov Normality Test :::")
+    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    if p > alpha:
+        print("  > Sample looks Gaussian (fail to reject H0)")
+    else:
+        print("  > Sample does not look Gaussian (reject H0)")
+
+    return {"stat": stat, "p": p}
+
+
+def normality_test_anderson(X: np.ndarray) -> Dict:
+    """
+    Perform the Anderson-Darling test for normality on the input data.
+
+    The Anderson-Darling test is a modification of the Kolmogorov-Smirnov test `kstest` for the null hypothesis
+    that a sample is drawn from a population that follows a particular distribution. It gives more weight to
+    the tails than does the `kstest`.
+
+    For the Anderson-Darling test, the critical values depend on which distribution is being tested against.
+    This function works for normal distributions.
+
+    HO: the sample is drawn from a normal distribution
+    if test statistic > critical value for a given significance level: reject H0
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The array containing the sample to be tested.
+
+    Returns
+    -------
+    Dict:
+        'stat': (float) The test statistic.
+        'critical_values': (list) The critical values for this distribution.
+        'significance_level': (list) The significance levels for the corresponding critical values in `critical_values`.
+
+    Notes
+    ----
+    - Can be used with large sample sizes.
+    - More sensitive to departures from normality at the tails.
+    - Unlike the KS-Test and Shapiro-Wilk Test, the Anderson-Darling test is a modification of the KS-Test which gives more weight to the tails.
+    - Has the advantage of testing against different distribution types (exponential, logistic, etc), not just normal.
+    """
+
+    result = anderson(X)
+    print("::: Anderson-Darling Normality Test :::")
+    print(f"  > Statistics={result.statistic:.3f}")
+    print(f"  > Critical values: {result.critical_values}")
+    print(f"  > Significance levels: {result.significance_level}")
+
+    for i in range(len(result.critical_values)):
+        sl, cv = result.significance_level[i], result.critical_values[i]
+        if result.statistic < cv:
+            print(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
+        else:
+            print(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
+
+    return {
+        "stat": result.statistic,
+        "critical_values": result.critical_values,
+        "significance_level": result.significance_level,
+    }
+
+
+def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
+    """
+    Perform D'Agostino's K^2 test for normality on the input data.
+
+    D'Agostino's K^2 test is a goodness-of-fit normality test based on combined measures of skewness and kurtosis.
+    This test gives a combined measure of skewness and kurtosis, two parameters of the normal distribution.
+    A combined test increases the chances of rejecting a null hypothesis. In other words, it's a more conservative
+    test and has more power to reject the null hypothesis if it's not true.
+
+    HO: the sample is drawn from a normal distribution
+    if p-value < alpha: reject H0
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The array containing the sample to be tested.
+    alpha : float, optional
+        The significance level at which to test. The default is 0.05.
+
+    Returns
+    -------
+    Dict:
+        'stat': (float) The test statistic.
+        'p' : (float) The p-value for the test.
+
+    Notes
+    ----
+    - Tests for skewness and kurtosis, as well as omnibus test for normality.
+    - Useful for larger sample sizes, as skewness and kurtosis become more meaningful for larger samples.
+    - Like the Shapiro-Wilk Test, it is most powerful against departures from normality, without being heavily influenced by sample size.
+    """
+
+    stat, p = normaltest(X)
+    print("::: D'Agostino's K^2 Normality Test :::")
+    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    if p > alpha:
+        print("  > Sample looks Gaussian (fail to reject H0)")
+    else:
+        print("  > Sample does not look Gaussian (reject H0)")
+
+    return {"stat": stat, "p": p}
