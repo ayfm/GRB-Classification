@@ -12,8 +12,6 @@ from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.neighbors import KernelDensity, NearestNeighbors
 
-Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
-
 
 def _set_seed(seed: Union[int, None]) -> None:
     """
