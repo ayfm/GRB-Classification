@@ -4,13 +4,13 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 import numpy as np
 import ot
 from scipy.spatial.distance import cdist
-from scipy.stats import entropy, gaussian_kde
-from scipy.stats import shapiro, kstest, anderson, normaltest
+from scipy.stats import (anderson, entropy, gaussian_kde, kstest, normaltest,
+                         shapiro)
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
-from sklearn.metrics import pairwise_distances, silhouette_samples
-from sklearn.neighbors import NearestNeighbors, KernelDensity
+from sklearn.metrics import silhouette_samples
+from sklearn.neighbors import KernelDensity, NearestNeighbors
 
 Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
