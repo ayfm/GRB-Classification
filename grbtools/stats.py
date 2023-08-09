@@ -877,34 +877,6 @@ def wasserstein_distance_bootstrap(
     return {"mean": mean_distance, "std": std_distance}
 
 
-def normality_test_shapiro_wilkinson(X: np.ndarray, alpha: float = 0.05) -> Dict:
-    """
-    Perform a Shapiro-Wilkinson test for normality on the input data.
-    This test is relatively powerful with small samples.
-    You can use it when sample size is small (n <= 50)
-
-    HO: the sample is drawn from a normal distribution
-
-    if p-value < alpha: reject H0
-
-    Returns
-    -------
-        Dict:
-            'stat': (float) The test statistic.
-            'p' : (float) The p-value for the test.
-    """
-    stat, p = shapiro(X)
-
-    print("::: Shapiro-Wilkinson Normality Test:::")
-    print("  > Statistics=%.3f, p=%.3f' % (stat, p)")
-    if p > alpha:
-        print("Sample looks Gaussian (fail to reject H0)")
-    else:
-        print("Sample does not look Gaussian (reject H0)")
-
-    return stat, p
-
-
 def normality_test_shapiro_wilkinson(
     X: np.ndarray, alpha: float = 0.05
 ) -> Dict[str, float]:
