@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-@author: ayf
-
-methods for creating figures (matplotlib)
-"""
 
 import os
 import matplotlib as mplot
@@ -17,7 +12,12 @@ from sklearn.neighbors import NearestNeighbors
 from scipy import stats
 from .env import DIR_FIGURES
 import pickle
-from grbtools import models, env
+from grbtools import env
+from grbtools import models
+from grbtools import data as data_operations
+import seaborn as sns
+
+sns.set(font_scale=4)
 
 
 
@@ -32,109 +32,75 @@ mplot.rc('font', **font)
     
 ################################
 
-def sortClusters2D(data, group_list):
-    """
-    This function sorts the clusters that are randomly created by the model. 
-    The one with the lowest mean in the x-axis is labeled as 0 and the rest are sorted
-    in the same way. (i.e. 0 -- 1 -- 2 etc.)
-    """
-    group_list = np.sort(group_list)
-    grouped_data = data.groupby(data['clusters'])
-    
-    group_means = pd.DataFrame(columns=['group_no', 'means'])
-    group_means['group_no'] = group_list
-    means = []
-    for cluster in group_list:
-        group = grouped_data.get_group(cluster)
-        means.append(np.mean(group.iloc[:, 0]))
-    group_means['means'] = means
-    group_means = group_means.sort_values(by=['means'])
-    
-    no = group_means['group_no'].tolist() # no = new order
-    
-    if len(group_list) == 2:
-        data = data.replace({'clusters':{0:no.index(0), 1:no.index(1)}})
-    elif len(group_list) == 3:
-        data = data.replace({'clusters':{0:no.index(0), 1:no.index(1), 2:no.index(2)}})
-    elif len(group_list) == 4:
-        data = data.replace({'clusters':{0:no.index(0), 1:no.index(1), 2:no.index(2), 3:no.index(3)}})
-    elif len(group_list) == 5:
-        data = data.replace({'clusters':{0:no.index(0), 1:no.index(1), 2:no.index(2), 3:no.index(3), 4:no.index(4)}})
-    
-    return data
+def histogram(data=None, 
+              col="", 
+              figsize=(6,4), 
+              savefig=True,
+              title="",
+              filename=""):
+        
+    if data is not None:
+        plt.figure(figsize=figsize)
 
+        plt.hist(data[col], bins=50, color="white", edgecolor="black")
+        
+        plt.xlabel(col)
+        plt.ylabel("count")
 
-def scatter2D(data, xcol, ycol, outliers=False, magnetars=None, title="", ax=None, 
-              color=None, ref_line=None, ref_line_ax="x", legend_label=None,
-              fname=None, subdir=None, fmt="png", figsize=(10,8), force=False):
-    """ 
-    scatter 2-D data \n
-    data is pandas DataFrame \n
-    xcol and ycol indicate that which columns will be considered \n
-    outliers arg can be either True or a pandas Series. If it is true, 
-        then outliers will be read from dataframe.  \n
-    magnetars arg can be either True or a pandas Series. If it is true, 
-        then magnetars will be read from dataframe \n
-    if add_tline is True, then T=2 sec line will be drawn
-    """
-    
-    # get data values
-    dvalues = data[[xcol, ycol]].values
-    # set default values
-    ovalues = np.repeat(False, repeats=dvalues.shape[0])
-    mvalues = np.repeat(False, repeats=dvalues.shape[0])
-    
-    
-    # check if outliers is specified
-    if isinstance(outliers, bool) and outliers:
-        assert "outlier" in data.columns, "Outlier column could not be found in dataframe"
-        ovalues = data[["outlier"]].values.flatten()
-    elif isinstance(outliers, (pd.DataFrame, pd.Series)):
-        ovalues = outliers.loc[data.index].values.flatten()
-    # check if magnetars is specified
-    if isinstance(magnetars, bool) and magnetars:
-        assert "magnetar" in data.columns, "Magnetar column could not be found in dataframe"
-        mvalues = data[["magnetar"]].values.flatten()
-    elif isinstance(magnetars, (pd.DataFrame, pd.Series)):
-        mvalues = magnetars.loc[data.index].values.flatten()
-    
-    # create figure object
-    if ax is None:
-        fig = plt.figure()
-        # set figsize
-        if not figsize is None:
-            fig.set_size_inches(figsize) 
-        ax = plt.gca()
-    
-    # scatter non-outlier values 
-    ax.scatter(dvalues[ovalues==False,0], dvalues[ovalues==False,1], 
-               marker="o", color=color, alpha=0.7, label=legend_label)
-    # scatter outlier data
-    if any(ovalues):
-        ax.scatter(dvalues[ovalues==True,0], dvalues[ovalues==True,1], 
-                   marker="x", color="red", alpha=0.7, label="outliers")
-    # scatter magnetars
-    if any(mvalues):
-        ax.scatter(dvalues[mvalues==True,0], dvalues[mvalues==True,1],
-                   marker = '*', s=100, facecolor="gray", edgecolor="black", linewidth=1.,
-                   label="magnetars")
-         
-    # draw T=2sec line
-    if not ref_line is None:
-        draw_ref_line(ax, ref_line, ref_line_ax)
+        plt.title(title)
 
-    # set ax props
-    ax.set_title(title)
-    ax.set_xlabel(xcol)
-    ax.set_ylabel(ycol)
-    
-    # save figure
-    if not fname is None:
-        save_figure(fname, subdir, fmt, force=force)
-    
-    # return ax
-    return ax
+        if savefig:
+            plt.savefig(os.path.join(env.DIR_FIGURES, "raw_data_plots/"+filename))
+        return
+    else:
+        raise Exception("Data is not privided.")
 
+def scatter2D(data=None, 
+              feats=[], 
+              figsize=(6,4), 
+              savefig=True,
+              title="",
+              filename=""):
+        if data is not None:
+            plt.figure(figsize=figsize)
+
+            plt.scatter(data[feats[0]], data[feats[1]], color="blue", marker=".", edgecolors="black", label="inlier", s=50)
+            
+            plt.xlabel(feats[0])
+            plt.ylabel(feats[1])
+
+            plt.title(title)
+            if savefig:
+                plt.savefig(os.path.join(env.DIR_FIGURES, "raw_data_plots/"+filename), dpi=300, bbox_inches='tight')
+
+            return
+        else:
+            raise Exception("Data is not privided.")
+
+def scatter3D(data=None, 
+              feats=[], 
+              figsize=(6,4), 
+              savefig=True,
+              title="",
+              filename=""):
+        
+        if data is not None:
+            plt.figure(figsize=figsize)
+
+            ax = plt.axes(projection ="3d")
+            ax.scatter3D(data[feats[0]], data[feats[1]], data[feats[2]], color="blue", marker=".", edgecolors="black", label="inlier", s=50)
+            
+            ax.set_xlabel(feats[0])
+            ax.set_ylabel(feats[1])
+            ax.set_zlabel(feats[2])
+
+            ax.set_title(title)
+
+            if savefig:
+                plt.savefig(os.path.join(env.DIR_FIGURES, "raw_data_plots/"+filename), dpi=300, bbox_inches='tight')
+            return
+        else:
+            raise Exception("Data is not privided.")
 
 def create_grid_space_2d(xmin, xmax, nGridX, ymin, ymax, nGridY):
     """
@@ -161,7 +127,6 @@ def create_grid_space_2d(xmin, xmax, nGridX, ymin, ymax, nGridY):
     XX = np.array([X.ravel(), Y.ravel()]).T
     return X, Y, XX
     
-    
 def draw_cluster_boundary(ax, model, n_grid_points=500, ax_range=None):
    
     # get axes ranges
@@ -186,35 +151,50 @@ def draw_cluster_boundary(ax, model, n_grid_points=500, ax_range=None):
     return ax
 
 def colors(index):
-    colors = ['firebrick', 'olivedrab', 'royalblue', 'mediumorchid', 'peru']
+    colors = ['firebrick', 'olivedrab', 'royalblue', 'mediumorchid', 'peru',
+              'darkorange', 'darkcyan', 'darkslategray', 'darkkhaki', 'darkseagreen']
     return colors[index]
 
 def markers(index):
-    markers = ['o','^','x','P','p']
+    markers = ['o','^','x','P','p','*','D','s','v','+']
     return markers[index]
 
 def clusterNames(index):
-    clusters = ['Cluster 1', 'Cluster 2', 'Cluster 3', 'Cluster 4', 'Cluster 5']
+    clusters = ['Cluster '+str(i) for i in range(1,11)]
     return clusters[index]
 
 def extractCatalogueName(file_name):
     return file_name.split('_')[0]
     
-def extractCovType(model_name):
     tokens = model_name.split("_")
     cov_token = tokens[-1]
     cov_type = cov_token.split(".")[0][1:]
     return cov_type
     
-def scatter2DWithClusters(model_name, data, title="", xlabel="", ylabel="", figure_save=True):
-    model_path = env.DIR_MODELS + '/' + model_name
-    model = models.loadModelbyName(model_path)
+def scatter2DWithClusters(cat_name = "",
+                          model_name="",
+                          feat_space=[],
+                          n_components = 0, 
+                          data = None, 
+                          title="", xlabel="", ylabel="", 
+                          figure_save=True):
+    if data is None:
+        raise Exception("Data is not provided.")
+
+    if model_name != "":
+        model_path = os.path.join(env.DIR_MODELS, cat_name, model_name)
+        model = models.loadModelbyName(model_path)
+    else:
+        model = models.loadModelbyProperties(dataset_name=cat_name, 
+                                             feat_space=feat_space, 
+                                             n_components=n_components)
+
     
     data = data.drop('clusters', axis=1, errors='ignore')
     
     
     data['clusters'] = model.predict(data)
-    data = sortClusters2D(data, pd.unique(data['clusters']))
+    #data = sortClusters2D(data, pd.unique(data['clusters']))
     
     grouped_data = data.groupby(data['clusters'])
     
@@ -236,14 +216,229 @@ def scatter2DWithClusters(model_name, data, title="", xlabel="", ylabel="", figu
     ax.set_ylabel(ylabel, fontsize=12)
     ax.set_axisbelow(True)
     ax.grid(color='lightgray')
-    ax.set_title(title + " | " + extractCovType(model_name).upper())
+    ax.set_title(title)
     
     
     if figure_save:
-        figure_path = env.DIR_FIGURES + "/" + extractCatalogueName(model_name) + "/"
+        figure_path = os.path.join(env.DIR_FIGURES, "model_plots", cat_name)
         figure_name = model_name.replace('.model', '.pdf')
-        fig.savefig(figure_path + figure_name)
+        fig.savefig(os.path.join(figure_path, figure_name), dpi=300, bbox_inches='tight')
 
+    return fig, ax
     
-    #ax.show()
+def plot_outliers(data=None, 
+                  cat_name = "", 
+                  threshold_density=0.025, 
+                  feat_space = [],
+                  save_plot = True, 
+                  figsize = (6,4)):
+    if data is not None:
+        X_df = data_operations.get_values(data)
+        
+        df_outlier = data[data['is_outlier'] == True]
+        df_inlier = data[data['is_outlier'] == False]
+        n_outliers = len(df_outlier)
+        n_inliers = len(df_inlier)
+
+        plt.figure(figsize=figsize)
+        
+        if len(feat_space) == 1: # if 1D
+            plt.scatter(
+                X_df[:, 0], 
+                np.exp(data['log_dens']), 
+                lw=1,
+                marker=".")
+            plt.scatter(X_df[~data['is_outlier'], 0], -0.005 - 0.01 * np.random.random(n_inliers), marker=".", color="black", label="inlier")
+            plt.scatter(X_df[data['is_outlier'], 0], -0.005 - 0.01 * np.random.random(n_outliers), marker=".", color="red", label="outlier")
+            plt.xlabel(feat_space[0])
+
+        elif len(feat_space) == 2: # if 2D
+            plt.scatter(df_inlier.loc[:, feat_space[0]], df_inlier.loc[:, feat_space[1]], color="blue", marker=".", edgecolors="black", label="inlier")
+            plt.scatter(df_outlier.loc[:, feat_space[0]], df_outlier.loc[:, feat_space[1]], color="red", marker="o", edgecolors="black", label="outlier") 
+            plt.xlabel(feat_space[0])
+            plt.ylabel(feat_space[1])
+            plt.grid(linestyle="--")
+
+        elif len(feat_space) == 3: # if 3D
+            ax = plt.axes(projection ="3d")
+            ax.scatter3D(df_inlier.loc[:, feat_space[0]], df_inlier.loc[:, feat_space[1]], df_inlier.loc[:, feat_space[2]], color="blue", marker=".", edgecolors="black", label="inlier", s=50)
+            ax.scatter3D(df_outlier.loc[:, feat_space[0]], df_outlier.loc[:, feat_space[1]], df_outlier.loc[:, feat_space[2]], color="red", marker="X", edgecolors="black", label="outlier", s=100)
+            ax.set_xlabel(feat_space[0])
+            ax.set_ylabel(feat_space[1])
+            ax.set_zlabel(feat_space[2])
+        else:
+            raise Exception("Invalid data shape")
+
+
+        feat_space_txt = "-".join(feat_space)
+        
+        plt.legend()
+        plt.title(cat_name.upper() + " | " + feat_space_txt + " | Thr: " + str(threshold_density))
+
+        if save_plot:
+            plt.savefig(os.path.join(env.DIR_FIGURES, ("outlier_plots/" + cat_name + "_" + feat_space_txt + "_" + str(threshold_density) + ".pdf")))
+        
+        return
+    else:
+        raise Exception("Data is None")
     
+def plot_models(cat_name = "",
+                data = None,
+                model_name = ""):
+    if data is None:
+        raise Exception("Data is None")
+    
+    if len(data.columns) == 2: #Scatter 2D
+        scatter2DWithClusters(cat_name=cat_name,
+                              model_name=model_name,
+                              data=data,
+                              title=cat_name.upper(),
+                              xlabel=data.columns[0],
+                              ylabel=data.columns[1],
+                              figure_save=True)    
+
+def plot_scores(scores, title=""):
+    k_scores = tuple(scores.items())
+    # sort scores by k
+    k_scores = sorted(k_scores, key=lambda x: x[0])
+    # extract k and score values
+    k_values = [k for k, _ in k_scores]
+    scores = [score for _, score in k_scores]
+
+    plt.figure(figsize=(6, 3))
+
+    plt.plot(
+        k_values,
+        scores,
+        marker="X",
+        color="r",
+        linestyle="dashed",
+        linewidth=1,
+        markersize=8,
+    )
+    plt.xticks(k_values)
+    plt.xlabel("k")
+    plt.ylabel("score")
+    plt.grid(linestyle="--", color="lightgray")
+    plt.title(title)
+
+def plot_scores_all(df_scores = None):
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    x = df_scores.index
+    aic_ = df_scores["aic"].values
+    bic_ = df_scores["bic"].values
+    sil_ = df_scores["sil_euc"].values
+    wcss_ = df_scores["wcss"].values
+    gap_ = df_scores["gap"].values
+    dbs_ = df_scores["dbs"].values
+    chs_ = df_scores["chs"].values
+
+    ax.plot(x, aic_, label="AIC", marker="o")
+    ax.plot(x, bic_, label="BIC", marker="o")
+    ax.plot(x, sil_, label="Silhouette Score", marker="o", linestyle="--")
+    ax.plot(x, wcss_, label="WCSS", marker="o", linestyle="-.")
+    ax.plot(x, gap_, label="Gap Statistics", marker="o", linestyle=":")
+    ax.plot(x, dbs_, label="Davies-Bouldin Index", marker="o", linestyle="-")
+    ax.plot(x, chs_, label="Calinski Harabasz Score", marker="o", linestyle="--")
+
+    # For visual clarity
+    ax.set_xlabel("Number of Components")
+    ax.set_ylabel("Normalized Score")
+    ax.legend(loc="best")
+    ax.grid(True)
+    plt.title("Normalized Clustering Metrics vs. Number of Components")
+    plt.tight_layout()
+    plt.show()
+
+def plot_radar(df_scores_normalized = None):
+
+    data = df_scores_normalized.to_dict()
+    k_values = [f"K={k}" for k in df_scores_normalized.index]
+
+    del data["wcss"]
+    del data["sil_mah"]
+    components = df_scores_normalized.shape[0]
+
+    # Number of variables
+    categories = list(data.keys())
+    N = len(categories)
+
+    # Create a color palette:
+    my_palette = plt.cm.get_cmap("Set1", len(data.keys()))
+
+    # Create background
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={"projection": "polar"})
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    # Draw one axe per variable + add labels
+    angles = [n / float(components) * 2 * np.pi for n in range(components)]
+    # angles += angles[:1]  # This ensures the data is "closed" in the chart
+    plt.xticks(angles, k_values)  # Using the component number for xtick labels
+
+    # Draw ylabels
+    ax.set_rlabel_position(0)
+    plt.yticks([0.2, 0.4, 0.6, 0.8], ["0.2", "0.4", "0.6", "0.8"], color="grey", size=12)
+    plt.ylim(0, 1)
+
+    # Plot data
+    for i, key in enumerate(data.keys()):
+        values = list(data[key].values())
+        # values += values[:1]  # This ensures the data is "closed" in the chart
+        ax.plot(
+            angles,
+            values,
+            linewidth=2,
+            linestyle="solid",
+            label=key,
+            color=my_palette(i),
+            marker="o",
+        )
+        # ax.fill(angles, values, color=my_palette(i), alpha=0.1)
+
+    # Add legend
+    plt.legend(loc="upper right", bbox_to_anchor=(0.1, 0.1))
+    plt.show()
+
+def plot_parallel_coord(df_scores_normalized = None):
+    df = df_scores_normalized.copy(deep=True)
+    df["K"] = df.index.values
+    df["K"] = df["K"].apply(lambda x: f"K={x}")
+    df.drop(columns=["wcss", "sil_mah"], inplace=True)
+
+
+    # Create parallel coordinates plot
+    plt.figure(figsize=(12, 6))
+    pd.plotting.parallel_coordinates(
+        df,
+        class_column="K",
+        colormap=plt.get_cmap("Set1"),
+        linewidth=2,
+        marker="x",
+    )
+    plt.title("Parallel Coordinates Plot for Clustering Scores")
+    plt.ylabel("Score")
+    plt.grid(True)
+    plt.legend(title="Configurations", loc="center left", bbox_to_anchor=(1, 0.5))
+    plt.tight_layout()
+    plt.show()
+
+def plot_heatmap(df_scores_normalized):
+    df = df_scores_normalized.copy(deep=True)
+    df.drop(columns=["wcss", "sil_mah"], inplace=True)
+
+    # Plot the heatmap
+    plt.figure(figsize=(10, 8))
+    sns.set(font_scale=0.5)
+    sns.heatmap(
+        df,
+        annot=True,
+        cmap="gist_heat_r",
+        cbar_kws={"label": "Normalized Score"},
+    )
+    plt.title("Scores Heatmap with Row-wise Normalization")
+    plt.show()
+
+
