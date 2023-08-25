@@ -1195,3 +1195,41 @@ def detect_outliers(
     is_outlier = dens < density_threshold
 
     return {"is_outlier": is_outlier, "density": dens}
+
+
+
+def normalize(x: np.ndarray, invert:bool=False):
+    """
+    Normalize an array to [0, 1] range, considering NaN and inf values.
+    
+    Parameters:
+    -----------
+    x : array-like
+        The input data to be normalized. Can be a list or numpy array.
+    
+    invert : bool, optional (default=False)
+        If True, invert the values before normalization. This does not mean
+        the resulting values will be in [1, 0] range, it simply inverts the
+        sign of each value.
+    
+    Returns:
+    --------
+    np.ndarray
+        The normalized array.
+    """
+    
+    # Convert input to numpy array
+    x = np.array(x)
+    
+    # If inverse flag is True, invert the values
+    if invert:
+        x = -x
+
+    # Compute the minimum and maximum, ignoring NaN values
+    min_ = np.nanmin(x)
+    max_ = np.nanmax(x)
+    
+    # Normalize the array
+    x = (x - min_) / (max_ - min_)
+
+    return x
