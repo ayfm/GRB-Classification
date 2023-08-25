@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-@author: ayf
-
-methods for data operations
+This file performs some data reading tasks.
 """
 
 import os
@@ -11,241 +7,201 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
 from scipy import stats
-from .env import dir_catalogs, dir_datasets
-
-# catalog directories
-path_cat_batse = os.path.join(dir_catalogs, "batse_catalog.xlsx")
-path_cat_fermi = os.path.join(dir_catalogs, "fermi_catalog.xlsx")
-path_cat_swift = os.path.join(dir_catalogs, "swift_catalog.xlsx")
-path_cat_grb_ee = os.path.join(dir_catalogs, "grb_ee.xlsx")
-path_cat_batse_redshift = os.path.join(dir_catalogs, "batse_redshift.xlsx")
-path_cat_swift_magnetars = os.path.join(dir_catalogs, "swift_magnetars.xlsx")
+from grbtools import env
+from grbtools import disp
+from grbtools import stats
 
 
-def _createDatasetDirectory(subdir=None):
-    """ 
-    creates dataset directory if not exists
+def check_catalogue_exists(cat_name):
     """
-    
-    # if base dir not exists, create
-    if not os.path.exists(dir_datasets):
-        os.makedirs(dir_datasets)
-    
-    # if sub directories are not exists, create
-    if not subdir is None:
-        refdir = os.path.join(dir_datasets, subdir)
-        if not os.path.exists(refdir):
-            os.makedirs(refdir)
-    
-
-def createDatasetName(catalog, t90=False, t90i=False, hrd=False, lum=False):
-    """ 
-    create path for grb dataset  specified with arguments
+    checks if catalogue exists
     """
-    # ee is always True
-    ee = True
-    
-    fname = str(catalog).lower().strip()
-    if t90:
-        fname += "_t90"
-    if t90i:
-        fname += "_t90i"
-    if hrd:
-        fname += "_hrd"
-    if lum:
-        fname += "_lum"
-    
-    if any([t90, t90i, hrd, lum]):
-        if ee:
-            fname += "_yEE"
-        else:
-            fname += "_nEE"
-    # add file extension
-    # fname += ".csv"
-    return fname
-
-def getDatasetPath(catalog, dataset_name, fmt="csv"):
-    """ 
-    returns path of the dataset
-    """
-    return os.path.join(dir_datasets, catalog, dataset_name+"."+fmt)
-
-def isExist(catalog, dataset_name, fmt="csv"):
-    """ 
-    checks if specified data set is exists 
-    """
-    fpath = getDatasetPath(catalog, dataset_name, fmt)
-    return os.path.exists(fpath)
-
-def loadFromPath(dataset_path, fmt="csv", sheet_name=None):
-    """ 
-    loads dataset from path
-    """
-    if fmt == "csv":
-        return pd.read_csv(dataset_path, index_col=0) 
-    if fmt == "xlsx":
-        return pd.read_excel(dataset_path, sheet_name=sheet_name)
-    raise Exception("invalid format: {}".format(fmt))
-
-def load(catalog, t90=False, t90i=False, hrd=False, lum=False,
-         fmt="csv", sheet_name=None):
-    """
-    load grb dataset specified with arguments
-    """
-    # ee is always True
-    ee = True
-    
-    # get corresponding dataset file name
-    dataset_name = createDatasetName(catalog, t90, t90i, hrd, lum)
-    # get dataset path
-    dataset_path = getDatasetPath(catalog, dataset_name, fmt)
-    # check if dataset exists
-    assert isExist(catalog, dataset_name, fmt), "No such dataset: {}".format(dataset_path)
-    # load dataset
-    return loadFromPath(dataset_path, fmt, sheet_name)  
-    
-
-def save(frame, dataset_name, catalog, force=False, fmt="csv", sheet_name=None, 
-         freez_panes=True):
-    """ 
-    save dataset to the directory \n
-    dataset is pandas dataframe
-    """
-    # create dataset dir if not exists
-    _createDatasetDirectory(subdir=catalog)
-    
-    # get dataset path
-    dataset_path = getDatasetPath(catalog, dataset_name, fmt)
-    
-    # check if dataset is already created
-    if not force and isExist(catalog, dataset_name, fmt):
-        raise Exception("!!! dataset exists: {}".format(dataset_path))
-    
-    # save dataframe
-    if fmt == "csv":
-        frame.to_csv(dataset_path)
-    elif fmt == "xlsx":
-        if sheet_name is None:
-            sheet_name = "data"
-        if freez_panes:
-            freeze_panes=(1,0)
-        frame.to_excel(dataset_path, sheet_name=sheet_name, engine="xlsxwriter",
-                       freeze_panes=freeze_panes)
-    else:
-        raise Exception("invalid file format: {}".format(fmt))
-
-def getFeaturesFromFlags(t90, t90i, hrd, lum, log=False, normalized=False):
-    """ 
-    returns feature list specified with flags
-    """
-    features = list()
-    if not log:
-        if t90  : features.append("t90")
-        if t90i : features.append("t90i")
-        if hrd  : features.append("hrd")
-        if lum  : features.append("lum")
-    else:
-        if t90  : features.append("lgT90")
-        if t90i : features.append("lgT90i")
-        if hrd  : features.append("lgHrd")
-        if lum  : features.append("lgLum")
-        
-        if normalized:
-            features = [f+"_N" for f in features]
-        
-    return features
-
-def getFlagsFromFeatures(features, log=False, normalized=False):
-    """ 
-    returns flags (t90, t90i, hrd, lum) based on features \n
-    features are array-like contains features "t90", "t90i", "hrd", "lum"
-    """
-    # normalized is always False
-    normalized = False
-    
-    if not log:
-        t90  = "t90"  in features
-        t90i = "t90i" in features 
-        hrd  = "hrd"  in features
-        lum  = "lum"  in features
-    else:
-        if not normalized:
-            t90  = "lgT90"  in features
-            t90i = "lgT90i" in features 
-            hrd  = "lgHrd"  in features
-            lum  = "lgLum"  in features
-        else:
-            t90  = "lgT90_N"  in features
-            t90i = "lgT90i_N" in features 
-            hrd  = "lgHrd_N"  in features
-            lum  = "lgLum_N"  in features
-            
-    # return flags in order
-    return t90, t90i, hrd, lum
-
+    if not os.path.exists(os.path.join(env.DIR_DATASETS, cat_name)):
+        print("Catalogue {} does not exist.".format(cat_name))
+        return False
+    return True
 
 
 def removeNaNs(dframe, subset=None, how="any"):
-    """ 
+    """
     removes invalid values (nan, inf) from dataframe
     """
     dframe = dframe.replace((np.inf, -np.inf), np.nan)
     return dframe.dropna(subset=subset, how=how)
-    
 
-def detectOutliersSigma(data, sigma=3):
-    raise Exception("check it")
 
-    # create outliers frame
-    outliers = pd.DataFrame(index=data.index, columns=data.columns)
-    outliers.fillna(False, inplace=True)
-    
-    # for each column
-    for col in data.columns:
-        # calculate zscore
-        zscore = stats.zscore(data.loc[:, col])
-        outliers.loc[:, col] = abs(zscore) > sigma
-        print(">>> Total outlier in {} column is {}".format(col, outliers.loc[:, col].sum()))
-    
-    return outliers
-
-def detectOutliersIQR(data, whisker=1.5):
-    raise Exception("check it")
-    
-    # create outliers frame
-    outliers = pd.DataFrame(index=data.index, columns=data.columns)
-    outliers.fillna(False, inplace=True)
-    
-    # for each column
-    for col in data.columns:
-        # calculate quartiles
-        q1 = data.loc[:, col].quantile(0.25)
-        q3 = data.loc[:, col].quantile(0.75)
-        IQR = q3-q1
-        # calculate lower and upper range
-        lower_range = q1 - (whisker * IQR)
-        upper_range = q3 + (whisker * IQR)
-        outliers.loc[:, col] = data.loc[:, col].apply(lambda x: 
-                                                      not (lower_range <= x <= upper_range))
-        print(">>> Total outlier in {} column is {}".format(col, outliers.loc[:, col].sum()))
-    
-    return outliers
-
-def detectOutliersDBSCAN(data, cols, min_samples, eps):
-    """ 
-    detects outliers in data \n
-    data is pandas DataFrame \n
-    cols is array of columns to be examined \n
-    min_samples and eps are DBSCAN parameters \n
-    a new column "outlier" is added to the dataframe
+def replace_infs(dframe):
     """
-    # create DBSCAN object
-    db = DBSCAN(eps=eps, min_samples=min_samples, n_jobs=6)
-    # fit and get labels
-    labels = db.fit_predict(data[cols].values)
-    # add outliers to the dataframe
-    data["outlier"] = (labels==-1)
-    # return (labels==-1).reshape(-1,1)
-    # return dataframe
+    replaces inf with nans and drops nans
+    """
+    return dframe.replace([np.inf, -np.inf], np.nan).dropna()
+
+
+def load(
+    cat_name,
+    feats=[],
+    clean_nans=True,
+    clean_infs=True,
+    plot_data=False,
+    without_outliers=False,
+    verbose=False,
+):
+    """
+    loads catalogue
+    """
+    cat_file_name = cat_name + ".xlsx"
+    if not check_catalogue_exists(cat_file_name):
+        return None
+    else:
+        path = os.path.join(env.DIR_DATASETS, cat_file_name)
+        df = pd.read_excel(path, index_col=0)
+
+        if len(feats) > 0:  # if features are specified
+            if without_outliers:
+                feats.append("is_outlier_" + "-".join(feats))
+            df = df[feats]
+            if clean_nans:
+                df = removeNaNs(df, subset=feats)
+            if clean_infs:
+                df = replace_infs(df)
+
+        if without_outliers:
+            feats = feats[:-1]
+            df = df[df["is_outlier_" + "-".join(feats)] == False]
+
+        if plot_data:
+            plot_filename = cat_name + "_" + "_".join(feats) + ".pdf"
+            if len(feats) == 1:
+                disp.histogram(
+                    data=df,
+                    col=feats[0],
+                    title="Histogram of " + cat_name + " " + feats[0],
+                    figsize=(8, 6),
+                    filename=plot_filename,
+                )
+            elif len(feats) == 2:
+                disp.scatter2D(
+                    data=df,
+                    feats=feats,
+                    figsize=(6, 4),
+                    title="Plot of " + cat_name.upper() + " " + " ".join(feats),
+                    filename=plot_filename,
+                )
+
+            elif len(feats) == 3:
+                disp.scatter3D(
+                    data=df,
+                    figsize=(6, 4),
+                    feats=feats,
+                    savefig=False,
+                    title="Plot of " + cat_name.upper() + " " + " ".join(feats),
+                    filename=plot_filename,
+                )
+
+        if without_outliers:
+            df = df[df["is_outlier_" + "-".join(feats)] == False]
+            df = df.drop(["is_outlier_" + "-".join(feats)], axis=1)
+
+        if verbose:
+            print(df.describe())
+            """
+            print("--------------------------")
+            print("Catalogue {} loaded.".format(cat_name.upper()))
+            print("Number of GRBs: {}".format(len(df)))
+            print("Number of features: {}".format(len(df.columns)))
+            print("Features: {}".format(df.columns.tolist()))
+            print("--------------------------")
+            """
+
+        return df
+
+
+def get_values(df):
+    """
+    returns values of dataframe
+    """
+    if df.shape[1] == 1:  # if 1D
+        return df.values.reshape(-1, 1)
+    else:  # if more than 1D
+        return df.values
+
+
+def save_data_to_file(df, cat_name):
+    """
+    saves data to the file
+    """
+    path = os.path.join(env.DIR_DATASETS, cat_name + ".xlsx")
+    df.to_excel(path)
+
+
+def find_outliers(
+    data,
+    threshold_density=0.025,
+    cat_name="",
+    save_data=True,
+    feat_space=[],
+    plot_result=False,
+    save_plot=False,
+    figsize=(10, 8),
+    verbose=True,
+):
+    data_values = get_values(data)
+    is_outlier, log_dens = stats.detect_outliers(data_values, threshold_density)
+
+    data["is_outlier"] = is_outlier
+    data["log_dens"] = log_dens
+
+    n_outliers = data["is_outlier"].sum()
+    n_inliers = len(data) - n_outliers
+    if verbose:
+        print("Total number of GRBs: {}".format(len(data)))
+        print("Number of outliers: {}".format(n_outliers))
+        print("Number of inliers: {}".format(n_inliers))
+
+    if save_data:
+        df = load(cat_name)
+        feat_space_txt = "-".join(feat_space)
+
+        df.loc[df.index.isin(data.index), "is_outlier_" + feat_space_txt] = is_outlier
+        df.loc[df.index.isin(data.index), "log_dens_" + feat_space_txt] = log_dens
+
+        save_data_to_file(df, cat_name)
+
+    if plot_result:
+        disp.plot_outliers(
+            data=data,
+            cat_name=cat_name,
+            threshold_density=threshold_density,
+            feat_space=feat_space,
+            figsize=figsize,
+        )
+
     return data
- 
+
+
+def check_for_normality(data, with_outliers=True, feat_space=[]):
+    # Extract inliers
+    if with_outliers:
+        data = data[data["is_outlier"] == False][feat_space].values.ravel()
+
+    stats.normality_test_shapiro_wilkinson(data)
+    print()
+    stats.normality_test_ks(data, normalization=True)
+    print()
+    stats.normality_test_anderson(data)
+    print()
+    stats.normality_test_dagostino(data)
+
+
+def merge_scores(scores={}):
+    n_clusters = list(scores.keys())
+    n_clusters.sort()
+    scores = {i: scores[i] for i in n_clusters}
+
+    df_scores = pd.DataFrame(scores).round(2)
+    df_scores["k"] = range(1, len(df_scores) + 1)
+    df_scores.set_index("k", inplace=True)
+
+    return df_scores
+
+
