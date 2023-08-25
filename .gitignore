@@ -132,3 +132,6 @@ dmypy.json
 
 # test folder
 tests/
+
+# MAC related files
+.DS_Store

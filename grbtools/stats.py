@@ -4,18 +4,13 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 import numpy as np
 import ot
 from scipy.spatial.distance import cdist
-from scipy.stats import anderson, entropy, gaussian_kde, kstest, normaltest, shapiro
+from scipy.stats import (anderson, entropy, gaussian_kde, kstest, normaltest,
+                         shapiro)
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.neighbors import KernelDensity, NearestNeighbors
-from grbtools import models as model_operations
-from grbtools import data as data_operations
-from grbtools import disp as disp_operations
-import pandas as pd
-
-Matrixlike = Union[np.ndarray, np.matrix, Iterable[Iterable[float]]]
 
 
 def _set_seed(seed: Union[int, None]) -> None:
@@ -29,18 +24,6 @@ def _set_seed(seed: Union[int, None]) -> None:
     # set seed if given
     if seed is not None:
         np.random.seed(seed)
-
-
-def _higher_better(score):
-    return score * -1
-
-
-def aic(model, data):
-    return _higher_better(model.aic(data))
-
-
-def bic(model, data):
-    return _higher_better(model.bic(data))
 
 
 def compute_mahalanobis_distance(
@@ -249,7 +232,7 @@ def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
         centroid = cluster_points.mean(axis=0)
         dispersion += ((cluster_points - centroid) ** 2).sum()
 
-    return _higher_better(dispersion)
+    return dispersion
 
 
 def gap_statistics(
@@ -365,8 +348,7 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     if n_clusters == 1:
         return np.nan
 
-    scores = dbs(X, labels)
-    return _higher_better(scores)
+    return dbs(X, labels)
 
 
 def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
@@ -1159,221 +1141,4 @@ def detect_outliers(
     # Identify outliers as points with a density below the threshold
     is_outlier = dens < density_threshold
 
-    return is_outlier, log_dens
-
-
-def normalize(x, inverse=False):
-    # normalize the array considering the inf and nan values
-    x = np.array(x)
-    if inverse:
-        x = -x
-
-    min_ = np.nanmin(x)
-    max_ = np.nanmax(x)
-    x = (x - min_) / (max_ - min_)
-
-    return x
-
-
-def normalize_scores(df_scores=None):
-    df_scores_normalized = df_scores.copy(deep=True)
-
-    df_scores_normalized["aic"] = normalize(df_scores_normalized["aic"].values)
-    df_scores_normalized["bic"] = normalize(df_scores_normalized["bic"].values)
-    df_scores_normalized["wcss"] = normalize(df_scores_normalized["wcss"].values)
-    df_scores_normalized["sil_euc"] = normalize(df_scores_normalized["sil_euc"].values)
-    df_scores_normalized["sil_mah"] = normalize(df_scores_normalized["sil_mah"].values)
-    df_scores_normalized["gap"] = normalize(df_scores_normalized["gap"].values)
-    df_scores_normalized["dbs"] = normalize(df_scores_normalized["dbs"].values)
-    df_scores_normalized["chs"] = normalize(df_scores_normalized["chs"].values)
-
-    df_scores_normalized = df_scores_normalized.round(2)
-
-    return df_scores_normalized
-
-
-def perform_statistical_tests(df_data, feat_space, cat_name):
-    predictions = model_operations.bring_all_predictions(
-        cat_name=cat_name, feat_space=feat_space, data=df_data
-    )
-
-    models = model_operations.bring_all_models(cat_name=cat_name, feat_space=feat_space)
-
-    scores = dict()
-    # models = {k: v for k, v in models.items() if str(k) != "1"}
-    # predictions = {k: v for k, v in predictions.items() if str(k) != "1"}
-
-    # AIC
-    scores["aic"] = {k: aic(data=df_data, model=model) for k, model in models.items()}
-
-    # BIC
-    scores["bic"] = {k: bic(data=df_data, model=model) for k, model in models.items()}
-
-    # WCSS
-    scores["wcss"] = {
-        k: intra_cluster_dispersion(df_data.values, predictions[k])
-        for k in models.keys()
-    }
-
-    # Silhouette score with Euclidean distance
-    scores["sil_euc"] = {
-        k: silhouette_score(df_data.values, predictions[k], metric="Euclidean")["mean"]
-        for k in models.keys()
-    }
-
-    # Silhouette score with Mahalanobis distance
-    scores["sil_mah"] = {
-        k: silhouette_score(df_data.values, predictions[k], metric="Mahalanobis")[
-            "mean"
-        ]
-        for k in models.keys()
-    }
-    """
-    # Gap Statistic
-    scores["gap"] = {
-        k: gap_statistics(
-            df_data.values,
-            predictions[k],
-            clusterer=models[k],
-            n_repeat=100,
-            random_state=None,
-        )["gap"]
-        for k in models.keys()
-    }
-    """
-    scores["gap"] = {k: 0 for k in models.keys()}
-
-    # Davies-Bouldin Index
-    scores["dbs"] = {
-        k: davies_bouldin_score(df_data, predictions[k]) for k in models.keys()
-    }
-
-    # Calinski-Harabasz Index
-    scores["chs"] = {
-        k: calinski_harabasz_score(df_data, predictions[k]) for k in models.keys()
-    }
-
-    df_scores = data_operations.merge_scores(scores)
-    df_scores = df_scores.iloc[1:]
-
-    normalized_scores = normalize_scores(df_scores)
-    return df_scores, normalized_scores
-
-
-def perform_wasserstein(feat_space, random_state=None, n_components=None):
-    clusters = model_operations.make_all_clusters(
-        feat_space=feat_space.copy(), n_components=n_components
-    )
-    batse_clusters = clusters["batse"]
-    fermi_clusters = clusters["fermi"]
-    swift_clusters = clusters["swift"]
-
-    # Wasserstein distance
-    distances_cluster = {
-        "BATSE-FERMI": {"C" + str(k + 1): 0 for k in range(n_components)},
-        "BATSE-SWIFT": {"C" + str(k + 1): 0 for k in range(n_components)},
-        "FERMI-SWIFT": {"C" + str(k + 1): 0 for k in range(n_components)},
-    }
-
-    for k in range(n_components):
-        dist = wasserstein_distance_bootstrap(
-            batse_clusters[str(k)].values,
-            fermi_clusters[str(k)].values,
-            random_state=random_state,
-            max_iter=100,
-        )
-
-        distances_cluster["BATSE-FERMI"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-        dist = wasserstein_distance_bootstrap(
-            batse_clusters[str(k)].values,
-            swift_clusters[str(k)].values,
-            random_state=random_state,
-            max_iter=100,
-        )
-
-        distances_cluster["BATSE-SWIFT"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-        dist = wasserstein_distance_bootstrap(
-            fermi_clusters[str(k)].values,
-            swift_clusters[str(k)].values,
-            random_state=random_state,
-            max_iter=100,
-        )
-
-        distances_cluster["FERMI-SWIFT"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-    return pd.DataFrame(distances_cluster)
-
-
-def perform_js(feat_space, random_state=None, n_components=None):
-    clusters = model_operations.make_all_clusters(
-        feat_space=feat_space.copy(), n_components=n_components
-    )
-    batse_clusters = clusters["batse"]
-    fermi_clusters = clusters["fermi"]
-    swift_clusters = clusters["swift"]
-
-    # JS distance
-    distances_cluster = {
-        "BATSE-FERMI": {"C" + str(k + 1): 0 for k in range(n_components)},
-        "BATSE-SWIFT": {"C" + str(k + 1): 0 for k in range(n_components)},
-        "FERMI-SWIFT": {"C" + str(k + 1): 0 for k in range(n_components)},
-    }
-
-    for k in range(n_components):
-        dist = jensen_shannon_distance_bootstrap(
-            batse_clusters[str(k)].values,
-            fermi_clusters[str(k)].values,
-            random_state=random_state,
-        )
-
-        distances_cluster["BATSE-FERMI"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-        dist = jensen_shannon_distance_bootstrap(
-            batse_clusters[str(k)].values,
-            swift_clusters[str(k)].values,
-            random_state=random_state,
-        )
-
-        distances_cluster["BATSE-SWIFT"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-        dist = jensen_shannon_distance_bootstrap(
-            fermi_clusters[str(k)].values,
-            swift_clusters[str(k)].values,
-            random_state=random_state,
-        )
-
-        distances_cluster["FERMI-SWIFT"]["C" + str(k + 1)] = (
-            str(dist["mean"].round(2)) + "(" + str(dist["std"].round(2)) + ")"
-        )
-
-    return pd.DataFrame(distances_cluster)
-
-
-def perform_cross_catalogue_comparison(
-    feat_space, random_state=None, n_components=None, plot_catalogues=False
-):
-    wasserstein = perform_wasserstein(
-        feat_space, random_state=random_state, n_components=n_components
-    )
-    js = perform_js(feat_space, random_state=random_state, n_components=n_components)
-
-    print("::: Wasserstein Distance :::")
-    print(wasserstein)
-    print("\n")
-    print("::: Jensen-Shannon Distance :::")
-    print(js)
-
-    if plot_catalogues:
-        disp_operations.plot_cross_catalogue_2D(feat_space, n_components=n_components)
+    return {"is_outlier": is_outlier, "density": dens}

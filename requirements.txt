@@ -1,6 +1,19 @@
+---------
+ENV: grb
+conda create --name grb python=3.10
 conda install numpy pandas scikit-learn matplotlib scipy
 conda install astropy
 conda install openpyxl
 conda install -c conda-forge xlsxwriter
-conda install -c conda-forge hdbscan
-pip install mixes
+conda install seaborn
+conda install -c conda-forge pot
+
+ 
+---------
+ENV: grb-ivat
+conda create --name grb-ivat python=3.10
+conda activate grb-ivat
+conda install matplotlib numpy pandas scikit-learn
+pip install pyclustertend --no-deps
+conda install openpyxl
+conda install -c conda-forge xlsxwriter
