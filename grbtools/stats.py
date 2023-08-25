@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, Iterable, Literal, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 
 import numpy as np
 import ot
@@ -7,13 +7,11 @@ from scipy.spatial.distance import cdist
 from scipy.stats import (anderson, entropy, gaussian_kde, kstest, normaltest,
                          shapiro)
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.neighbors import KernelDensity, NearestNeighbors
-
-if TYPE_CHECKING:
-    from grbtools.gmm import GaussianMixtureModel
 
 
 def _set_seed(seed: Union[int, None]) -> None:
@@ -29,13 +27,13 @@ def _set_seed(seed: Union[int, None]) -> None:
         np.random.seed(seed)
 
 
-def AIC(model: GaussianMixtureModel, data: np.ndarray) -> float:
+def AIC(model: GaussianMixture, data: np.ndarray) -> float:
     """
     Compute the Akaike Information Criterion (AIC) for a given GaussianMixtureModel and data.
 
     Parameters:
     -----------
-    model : GaussianMixtureModel
+    model : GaussianMixture
         The Gaussian mixture model instance.
     
     data : np.ndarray
@@ -45,22 +43,16 @@ def AIC(model: GaussianMixtureModel, data: np.ndarray) -> float:
     --------
     float
         The computed AIC value.
-
-    Example:
-    --------
-    >>> model_instance = GaussianMixtureModel(...)
-    >>> data_array = np.array([...])
-    >>> aic_result = AIC(model_instance, data_array)
     """
     return model.aic(data)
 
-def BIC(model: GaussianMixtureModel, data: np.ndarray) -> float:
+def BIC(model: GaussianMixture, data: np.ndarray) -> float:
     """
     Compute the Bayesian Information Criterion (BIC) for a given GaussianMixtureModel and data.
 
     Parameters:
     -----------
-    model : GaussianMixtureModel
+    model : GaussianMixture
         The Gaussian mixture model instance.
     
     data : np.ndarray
@@ -70,12 +62,6 @@ def BIC(model: GaussianMixtureModel, data: np.ndarray) -> float:
     --------
     float
         The computed BIC value.
-
-    Example:
-    --------
-    >>> model_instance = GaussianMixtureModel(...)
-    >>> data_array = np.array([...])
-    >>> bic_result = BIC(model_instance, data_array)
     """
     return model.bic(data)
 
