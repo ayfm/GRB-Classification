@@ -4,13 +4,12 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 import numpy as np
 import ot
 from scipy.spatial.distance import cdist
-from scipy.stats import (anderson, entropy, gaussian_kde, kstest, normaltest,
-                         shapiro)
+from scipy.stats import anderson, entropy, gaussian_kde, kstest, normaltest, shapiro
 from sklearn.cluster import KMeans
-from sklearn.mixture import GaussianMixture
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
+from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
 
 
@@ -35,7 +34,7 @@ def AIC(model: GaussianMixture, data: np.ndarray) -> float:
     -----------
     model : GaussianMixture
         The Gaussian mixture model instance.
-    
+
     data : np.ndarray
         The dataset to compute the AIC for.
 
@@ -46,6 +45,7 @@ def AIC(model: GaussianMixture, data: np.ndarray) -> float:
     """
     return model.aic(data)
 
+
 def BIC(model: GaussianMixture, data: np.ndarray) -> float:
     """
     Compute the Bayesian Information Criterion (BIC) for a given GaussianMixtureModel and data.
@@ -54,7 +54,7 @@ def BIC(model: GaussianMixture, data: np.ndarray) -> float:
     -----------
     model : GaussianMixture
         The Gaussian mixture model instance.
-    
+
     data : np.ndarray
         The dataset to compute the BIC for.
 
@@ -64,6 +64,7 @@ def BIC(model: GaussianMixture, data: np.ndarray) -> float:
         The computed BIC value.
     """
     return model.bic(data)
+
 
 def compute_mahalanobis_distance(
     X: np.ndarray,
@@ -1183,30 +1184,29 @@ def detect_outliers(
     return {"is_outlier": is_outlier, "density": dens}
 
 
-
-def normalize(x: np.ndarray, invert:bool=False):
+def normalize(x: np.ndarray, invert: bool = False):
     """
     Normalize an array to [0, 1] range, considering NaN and inf values.
-    
+
     Parameters:
     -----------
     x : array-like
         The input data to be normalized. Can be a list or numpy array.
-    
+
     invert : bool, optional (default=False)
         If True, invert the values before normalization. This does not mean
         the resulting values will be in [1, 0] range, it simply inverts the
         sign of each value.
-    
+
     Returns:
     --------
     np.ndarray
         The normalized array.
     """
-    
+
     # Convert input to numpy array
     x = np.array(x)
-    
+
     # If inverse flag is True, invert the values
     if invert:
         x = -x
@@ -1214,7 +1214,7 @@ def normalize(x: np.ndarray, invert:bool=False):
     # Compute the minimum and maximum, ignoring NaN values
     min_ = np.nanmin(x)
     max_ = np.nanmax(x)
-    
+
     # Normalize the array
     x = (x - min_) / (max_ - min_)
 
