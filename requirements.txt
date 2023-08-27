@@ -7,7 +7,7 @@ conda install openpyxl
 conda install -c conda-forge xlsxwriter
 conda install seaborn
 conda install -c conda-forge pot
-
+conda install -c conda-forge coloredlogs
  
 ---------
 ENV: grb-ivat
