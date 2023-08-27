@@ -972,7 +972,10 @@ def normality_test_shapiro_wilkinson(
 
 
 def normality_test_ks(
-    X: np.ndarray, alpha: float = 0.05, normalization: bool = False, verbose: bool = True
+    X: np.ndarray,
+    alpha: float = 0.05,
+    normalization: bool = False,
+    verbose: bool = True,
 ) -> Dict[str, float]:
     """
     Perform a Kolmogorov-Smirnov test for normality on the input data.
@@ -997,7 +1000,7 @@ def normality_test_ks(
 
     normalization : bool, default=False
         If True, the data is normalized before the test is performed. This is recommended when the data is not normally distributed.
-    
+
     verbose : bool, default=True
         If True, print the results of the test.
 
@@ -1082,9 +1085,13 @@ def normality_test_anderson(X: np.ndarray, verbose: bool = True) -> Dict:
         for i in range(len(result.critical_values)):
             sl, cv = result.significance_level[i], result.critical_values[i]
             if result.statistic < cv:
-                logger.info(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
+                logger.info(
+                    f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level"
+                )
             else:
-                logger.info(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
+                logger.info(
+                    f"  > Sample does not look Gaussian (reject H0) at the {sl}% level"
+                )
 
     return {
         "stat": result.statistic,
@@ -1093,7 +1100,9 @@ def normality_test_anderson(X: np.ndarray, verbose: bool = True) -> Dict:
     }
 
 
-def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05, verbose: bool = True) -> Dict:
+def normality_test_dagostino(
+    X: np.ndarray, alpha: float = 0.05, verbose: bool = True
+) -> Dict:
     """
     Perform D'Agostino's K^2 test for normality on the input data.
 
@@ -1211,7 +1220,7 @@ def detect_outliers(
         n_X = len(X)
         # how many outliers were detected
         n_outliers = np.sum(is_outlier)
-        # how many inliers were detected
+        # how many inliers were detected
         n_inliers = n_X - n_outliers
         # calculate the percentage of outliers
         outlier_percentage = int(np.round((n_outliers / n_X) * 100))
