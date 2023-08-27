@@ -1129,6 +1129,7 @@ def detect_outliers(
     density_threshold: float,
     bandwidth: Union[float, str] = "scott",
     kernel: str = "gaussian",
+    verbose: bool = True,
 ) -> Dict:
     """
     Perform outlier detection using Kernel Density Estimation.
@@ -1152,6 +1153,9 @@ def detect_outliers(
     kernel : str, optional
         The kernel to be used in the density estimation. Should be one of the following:
         'gaussian', 'tophat', 'epanechnikov', 'exponential', 'linear', 'cosine'. The default is 'gaussian'.
+
+    verbose : bool, optional
+        If True, print the number of outliers detected.
 
     Returns
     -------
@@ -1184,6 +1188,23 @@ def detect_outliers(
 
     # Identify outliers as points with a density below the threshold
     is_outlier = dens < density_threshold
+
+    # Print the number of outliers detected
+    if verbose:
+        # how many data points?
+        n_X = len(X)
+        # how many outliers were detected
+        n_outliers = np.sum(is_outlier)
+        # how many inliers were detected
+        n_inliers = n_X - n_outliers
+        # calculate the percentage of outliers
+        outlier_percentage = int(np.round((n_outliers / n_X) * 100))
+        # calculate the percentage of inliers
+        inlier_percentage = 100 - outlier_percentage
+
+        logger.info(f">>> Total data points  : {len(X)}")
+        logger.info(f"  > Number of outliers : {n_outliers} [%{outlier_percentage}]")
+        logger.info(f"  > Number of inliers  : {n_inliers} [%{inlier_percentage}]")
 
     return {"is_outlier": is_outlier, "density": dens}
 
