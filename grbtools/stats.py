@@ -11,6 +11,10 @@ from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
+from grbtools import env
+
+# get logger
+logger = env.get_logger()
 
 
 def _set_seed(seed: Union[int, None]) -> None:
@@ -953,12 +957,12 @@ def normality_test_shapiro_wilkinson(
 
     stat, p = shapiro(X)
 
-    print("::: Shapiro-Wilkinson Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    logger.info("::: Shapiro-Wilkinson Normality Test :::")
+    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
     if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
+        logger.info("  > Sample looks Gaussian (fail to reject H0)")
     else:
-        print("  > Sample does not look Gaussian (reject H0)")
+        logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
@@ -1013,12 +1017,12 @@ def normality_test_ks(
     # test
     stat, p = kstest(X_, "norm")
 
-    print("::: Kolmogorov-Smirnov Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    logger.info("::: Kolmogorov-Smirnov Normality Test :::")
+    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
     if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
+        logger.info("  > Sample looks Gaussian (fail to reject H0)")
     else:
-        print("  > Sample does not look Gaussian (reject H0)")
+        logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
@@ -1058,17 +1062,17 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     """
 
     result = anderson(X)
-    print("::: Anderson-Darling Normality Test :::")
-    print(f"  > Statistics={result.statistic:.3f}")
-    print(f"  > Critical values: {result.critical_values}")
-    print(f"  > Significance levels: {result.significance_level}")
+    logger.info("::: Anderson-Darling Normality Test :::")
+    logger.info(f"  > Statistics={result.statistic:.3f}")
+    logger.info(f"  > Critical values: {result.critical_values}")
+    logger.info(f"  > Significance levels: {result.significance_level}")
 
     for i in range(len(result.critical_values)):
         sl, cv = result.significance_level[i], result.critical_values[i]
         if result.statistic < cv:
-            print(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
+            logger.info(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
         else:
-            print(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
+            logger.info(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
 
     return {
         "stat": result.statistic,
@@ -1110,12 +1114,12 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
     """
 
     stat, p = normaltest(X)
-    print("::: D'Agostino's K^2 Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
+    logger.info("::: D'Agostino's K^2 Normality Test :::")
+    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
     if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
+        logger.info("  > Sample looks Gaussian (fail to reject H0)")
     else:
-        print("  > Sample does not look Gaussian (reject H0)")
+        logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
