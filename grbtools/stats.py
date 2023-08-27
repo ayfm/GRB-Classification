@@ -922,7 +922,7 @@ def wasserstein_distance_bootstrap(
 
 
 def normality_test_shapiro_wilkinson(
-    X: np.ndarray, alpha: float = 0.05
+    X: np.ndarray, alpha: float = 0.05, verbose: bool = True
 ) -> Dict[str, float]:
     """
     Perform a Shapiro-Wilkinson test for normality on the input data.
@@ -942,6 +942,9 @@ def normality_test_shapiro_wilkinson(
     alpha : float, default=0.05
         Significance level for the test.
 
+    verbose : bool, default=True
+        If True, print the results of the test.
+
     Returns
     -------
     dict
@@ -957,18 +960,19 @@ def normality_test_shapiro_wilkinson(
 
     stat, p = shapiro(X)
 
-    logger.info("::: Shapiro-Wilkinson Normality Test :::")
-    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        logger.info("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        logger.info("  > Sample does not look Gaussian (reject H0)")
+    if verbose:
+        logger.info("::: Shapiro-Wilkinson Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
 
 def normality_test_ks(
-    X: np.ndarray, alpha: float = 0.05, normalization: bool = False
+    X: np.ndarray, alpha: float = 0.05, normalization: bool = False, verbose: bool = True
 ) -> Dict[str, float]:
     """
     Perform a Kolmogorov-Smirnov test for normality on the input data.
@@ -993,6 +997,9 @@ def normality_test_ks(
 
     normalization : bool, default=False
         If True, the data is normalized before the test is performed. This is recommended when the data is not normally distributed.
+    
+    verbose : bool, default=True
+        If True, print the results of the test.
 
     Returns
     -------
@@ -1017,17 +1024,18 @@ def normality_test_ks(
     # test
     stat, p = kstest(X_, "norm")
 
-    logger.info("::: Kolmogorov-Smirnov Normality Test :::")
-    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        logger.info("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        logger.info("  > Sample does not look Gaussian (reject H0)")
+    if verbose:
+        logger.info("::: Kolmogorov-Smirnov Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
 
-def normality_test_anderson(X: np.ndarray) -> Dict:
+def normality_test_anderson(X: np.ndarray, verbose: bool = True) -> Dict:
     """
     Perform the Anderson-Darling test for normality on the input data.
 
@@ -1045,6 +1053,8 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     ----------
     X : np.ndarray
         The array containing the sample to be tested.
+    verbose : bool, default=True
+        If True, print the results of the test.
 
     Returns
     -------
@@ -1062,17 +1072,19 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     """
 
     result = anderson(X)
-    logger.info("::: Anderson-Darling Normality Test :::")
-    logger.info(f"  > Statistics={result.statistic:.3f}")
-    logger.info(f"  > Critical values: {result.critical_values}")
-    logger.info(f"  > Significance levels: {result.significance_level}")
 
-    for i in range(len(result.critical_values)):
-        sl, cv = result.significance_level[i], result.critical_values[i]
-        if result.statistic < cv:
-            logger.info(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
-        else:
-            logger.info(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
+    if verbose:
+        logger.info("::: Anderson-Darling Normality Test :::")
+        logger.info(f"  > Statistics={result.statistic:.3f}")
+        logger.info(f"  > Critical values: {result.critical_values}")
+        logger.info(f"  > Significance levels: {result.significance_level}")
+
+        for i in range(len(result.critical_values)):
+            sl, cv = result.significance_level[i], result.critical_values[i]
+            if result.statistic < cv:
+                logger.info(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
+            else:
+                logger.info(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
 
     return {
         "stat": result.statistic,
@@ -1081,7 +1093,7 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     }
 
 
-def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
+def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05, verbose: bool = True) -> Dict:
     """
     Perform D'Agostino's K^2 test for normality on the input data.
 
@@ -1099,6 +1111,8 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
         The array containing the sample to be tested.
     alpha : float, optional
         The significance level at which to test. The default is 0.05.
+    verbose : bool, default=True
+        If True, print the results of the test.
 
     Returns
     -------
@@ -1114,12 +1128,14 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
     """
 
     stat, p = normaltest(X)
-    logger.info("::: D'Agostino's K^2 Normality Test :::")
-    logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        logger.info("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        logger.info("  > Sample does not look Gaussian (reject H0)")
+
+    if verbose:
+        logger.info("::: D'Agostino's K^2 Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
