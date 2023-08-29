@@ -23,7 +23,7 @@ DIR_MODELS = os.path.join("..", "models")
 
 
 # default log level
-_LOG_LEVEL = "DEBUG"
+_LOG_LEVEL = "INFO"
 
 # log formats
 _LOG_FORMAT = (
