@@ -1237,8 +1237,8 @@ def detect_outliers(
         inlier_percentage = 100 - outlier_percentage
 
         logger.info(f">>> Total data points  : {len(X)}")
-        logger.info(f"  > Number of outliers : {n_outliers} [%{outlier_percentage}]")
-        logger.info(f"  > Number of inliers  : {n_inliers} [%{inlier_percentage}]")
+        logger.info(f"  > Number of outliers : {n_outliers} [{outlier_percentage}%]")
+        logger.info(f"  > Number of inliers  : {n_inliers} [{inlier_percentage}%]")
 
     return {"is_outlier": is_outlier, "density": dens}
 
