@@ -4,13 +4,22 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 import numpy as np
 import ot
 from scipy.spatial.distance import cdist
-from scipy.stats import anderson, entropy, gaussian_kde, kstest, normaltest, shapiro
+from scipy.stats import (
+    anderson,
+    entropy,
+    gaussian_kde,
+    iqr,
+    kstest,
+    normaltest,
+    shapiro,
+)
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
+
 from grbtools import env
 
 # get logger
@@ -1269,3 +1278,48 @@ def normalize(x: np.ndarray, invert: bool = False):
     x = (x - min_) / (max_ - min_)
 
     return x
+
+
+def compute_bin_size(data: np.array, method: str = "freedman") -> int:
+    """ 
+    Computes the efficient number of bins for a histogram using the specified method.
+
+    Parameters:
+    - data (numpy array): The input data for which the bin size needs to be computed.
+    - method (str): The method used for bin size calculation. Either "freedman" or "sturge".
+    
+    Returns:
+    - int: The computed number of bins.
+
+    Method Explanations:
+    1. Freedman-Diaconis' Rule:
+       This method calculates the bin size based on data spread (IQR) and volume (n).
+       The formula for the bin width is given by:
+       bin width = 2 * IQR * n^(-1/3)
+       Where IQR is the interquartile range of the data.
+       The number of bins is then calculated as:
+       n_bins = (data's max value - data's min value) / bin width
+
+    2. Sturges' Formula:
+       This method calculates the number of bins based on data volume (n).
+       The formula is given by:
+       n_bins = 1 + 3.322 * log10(n)
+       Where n is the number of data points.
+
+    Raises:
+    - Exception: If an invalid method name is passed.
+    """
+
+    n_data = len(data)
+
+    if method == "freedman":
+        IQR = iqr(data)
+        bin_width = 2 * IQR * (n_data ** (-1 / 3))
+        n_bins = (np.max(data) - np.min(data)) / bin_width
+    elif method == "sturge":
+        n_bins = 1 + 3.322 * np.log10(n_data)
+    else:
+        raise ValueError("Method should be either 'freedman' or 'sturge'")
+
+    # Round to nearest integer and return
+    return int(round(n_bins))
