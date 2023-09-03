@@ -7,8 +7,10 @@ from sklearn.mixture import GaussianMixture
 
 class GaussianMixtureModel(GaussianMixture):
     """
-    Inherited version of sklearn.mixture.GaussianMixture that allows for
-    re-mapping of cluster indices. This is useful for when you want to re-assign the label of each cluster.
+    Inherited version of sklearn.mixture.GaussianMixture that allows for re-mapping of cluster
+    indices. This is useful for when you want to re-assign the label of each cluster.
+    If the sort_clusters parameter is set to True, then the clusters are sorted based on the means of the components,
+    right after the model is fitted.
     """
 
     def __init__(
@@ -29,7 +31,8 @@ class GaussianMixtureModel(GaussianMixture):
         random_state: Union[int, RandomState, None] = None,
         warm_start: bool = False,
         verbose: int = 0,
-        verbose_interval: int = 10
+        verbose_interval: int = 10,
+        sort_clusters: bool = True,
     ) -> None:
         super().__init__(
             n_components,
@@ -47,6 +50,8 @@ class GaussianMixtureModel(GaussianMixture):
             verbose=verbose,
             verbose_interval=verbose_interval,
         )
+
+        self._sort_clusters = sort_clusters
 
     def remap_labels(self, label_map: Dict[int, int]) -> None:
         """
@@ -104,3 +109,54 @@ class GaussianMixtureModel(GaussianMixture):
             self.covariances_ = self.covariances_[new_cluster_labels]
             self.precisions_ = self.precisions_[new_cluster_labels]
             self.precisions_cholesky_ = self.precisions_cholesky_[new_cluster_labels]
+
+    def sort_clusters_by_means(self):
+        """
+        Sorts the clusters of a Gaussian Mixture Model (GMM) based on the means of the components.
+
+        Args:
+            gmm_model: A trained instance of Gaussian Mixture Model (sklearn.mixture.GaussianMixture).
+
+        Returns:
+            None. Modifies the labels of the GMM model in-place.
+        """
+
+        # Raise an exception if the model is not fitted
+        if not self.converged_:
+            raise ValueError("The model is not fitted yet.")
+
+        # Get means and their corresponding component indices
+        means = [(i, mean) for i, mean in enumerate(self.means_)]
+
+        # Sort the means based on the first dimension of each mean vector
+        means.sort(key=lambda x: x[1][0])
+
+        # Create a label mapping dictionary using the sorted means
+        label_map = {means[i][0]: i for i in range(len(means))}
+
+        # Remap the labels of the GMM model using the label mapping
+        self.remap_labels(label_map)
+
+    def fit(self, X: ArrayLike, y: Any = None) -> "GaussianMixtureModel":
+        """
+        Fits a Gaussian Mixture Model (GMM) to the given data.
+
+        Args:
+            X (ArrayLike): The data to fit the GMM to.
+            y (Any, optional): Ignored. Defaults to None.
+
+        Returns:
+            GaussianMixtureModel: The fitted GMM model.
+
+        Notes:
+            - This method overrides the fit method of the sklearn.mixture.GaussianMixture class.
+            - If the sort_clusters parameter is set to True, then the clusters are sorted based on the means of the components.
+        """
+
+        # fit the model
+        super().fit(X, y)
+        # then, sort the clusters if required
+        if self._sort_clusters:
+            self.sort_clusters_by_means()
+
+        return self
