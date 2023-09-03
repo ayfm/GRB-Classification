@@ -63,15 +63,15 @@ class GaussianMixtureModel(_GMM):
 
         # set the model name
         if not model_name:
-            self.model_name = f"gmm_{n_components}"
+            self.model_name = f"C{n_components}"
         else:
             self.model_name = model_name
 
     def __str__(self) -> str:
-        return self.model_name
+        return f"<GMM {self.model_name}>"
 
     def __repr__(self, N_CHAR_MAX: int = 700) -> str:
-        return self.model_name
+        return self.__str__()
 
     def set_name(self, name: str) -> None:
         """
