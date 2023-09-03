@@ -1,3 +1,5 @@
+import os
+import pickle
 from typing import Any, Literal, Dict, Union
 
 from numpy.random import RandomState
@@ -72,6 +74,9 @@ class GaussianMixtureModel(_GMM):
         return self.model_name
 
     def set_name(self, name: str) -> None:
+        """
+        Set the name of the model.
+        """
         self.model_name = name
 
     def remap_labels(self, label_map: Dict[int, int]) -> None:
@@ -184,3 +189,56 @@ class GaussianMixtureModel(_GMM):
             self.sort_clusters_by_means()
 
         return self
+
+    def save(self, file_path: str):
+        """
+        Save the GaussianMixtureModel to a file using pickle.
+
+        Parameters:
+        - file_path (str): Path to the file where the model will be saved.
+
+        Raises:
+        - ValueError: If the model hasn't been fitted yet.
+        """
+
+        # Check if the model has been fitted
+        if not self.converged_:
+            raise ValueError("The model is not fitted yet.")
+
+        # Check if the file already exists
+        file_exists = os.path.isfile(file_path)
+
+        # Save the model
+        with open(file_path, "wb") as file:
+            pickle.dump(self, file)
+
+        # Log information about the operation
+        if file_exists:
+            logger.warning(f"Model overwritten at: {file_path}")
+        else:
+            logger.info(f"Model saved to: {file_path}")
+
+    @classmethod
+    def load(cls, file_path: str) -> "GaussianMixtureModel":
+        """
+        Load a GaussianMixtureModel from a file.
+
+        Parameters:
+        - file_path (str): Path to the file from which the model will be loaded.
+
+        Returns:
+        - GaussianMixtureModel: Loaded model.
+
+        Raises:
+        - FileNotFoundError: If the specified file doesn't exist.
+        """
+
+        # Ensure the file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Model file not found at: '{file_path}'")
+
+        # Load the model
+        with open(file_path, "rb") as file:
+            loaded_model = pickle.load(file)
+
+        return loaded_model
