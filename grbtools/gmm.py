@@ -2,10 +2,15 @@ from typing import Any, Literal, Dict, Union
 
 from numpy.random import RandomState
 from numpy.typing import ArrayLike
-from sklearn.mixture import GaussianMixture
+from sklearn.mixture import GaussianMixture as _GMM
+
+from grbtools import env
+
+# get logger
+logger = env.get_logger()
 
 
-class GaussianMixtureModel(GaussianMixture):
+class GaussianMixtureModel(_GMM):
     """
     Inherited version of sklearn.mixture.GaussianMixture that allows for re-mapping of cluster
     indices. This is useful for when you want to re-assign the label of each cluster.
@@ -32,6 +37,7 @@ class GaussianMixtureModel(GaussianMixture):
         warm_start: bool = False,
         verbose: int = 0,
         verbose_interval: int = 10,
+        model_name: str = None,
         sort_clusters: bool = True,
     ) -> None:
         super().__init__(
@@ -50,8 +56,23 @@ class GaussianMixtureModel(GaussianMixture):
             verbose=verbose,
             verbose_interval=verbose_interval,
         )
+        # flag to sort clusters based on the means of the components
+        self.sort_clusters = sort_clusters
 
-        self._sort_clusters = sort_clusters
+        # set the model name
+        if not model_name:
+            self.model_name = f"gmm_{n_components}"
+        else:
+            self.model_name = model_name
+
+    def __str__(self) -> str:
+        return self.model_name
+
+    def __repr__(self, N_CHAR_MAX: int = 700) -> str:
+        return self.model_name
+
+    def set_name(self, name: str) -> None:
+        self.model_name = name
 
     def remap_labels(self, label_map: Dict[int, int]) -> None:
         """
@@ -120,6 +141,7 @@ class GaussianMixtureModel(GaussianMixture):
         Returns:
             None. Modifies the labels of the GMM model in-place.
         """
+        logger.info("Sorting clusters by means.")
 
         # Raise an exception if the model is not fitted
         if not self.converged_:
@@ -153,10 +175,12 @@ class GaussianMixtureModel(GaussianMixture):
             - If the sort_clusters parameter is set to True, then the clusters are sorted based on the means of the components.
         """
 
+        # print log
+        logger.info(f"Fitting model: {self.__str__()}")
         # fit the model
         super().fit(X, y)
         # then, sort the clusters if required
-        if self._sort_clusters:
+        if self.sort_clusters:
             self.sort_clusters_by_means()
 
         return self
