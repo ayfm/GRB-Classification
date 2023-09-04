@@ -12,6 +12,7 @@ from scipy.stats import (
     kstest,
     normaltest,
     shapiro,
+    norm,
 )
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score as chs
@@ -1281,13 +1282,13 @@ def normalize(x: np.ndarray, invert: bool = False):
 
 
 def compute_bin_size(data: np.array, method: str = "freedman") -> int:
-    """ 
+    """
     Computes the efficient number of bins for a histogram using the specified method.
 
     Parameters:
     - data (numpy array): The input data for which the bin size needs to be computed.
     - method (str): The method used for bin size calculation. Either "freedman" or "sturge".
-    
+
     Returns:
     - int: The computed number of bins.
 
@@ -1323,3 +1324,25 @@ def compute_bin_size(data: np.array, method: str = "freedman") -> int:
 
     # Round to nearest integer and return
     return int(round(n_bins))
+
+
+def confidence_to_nstd(confidence_level: float) -> float:
+    """
+    Convert confidence level (between 0 and 1) to number of standard deviations for a univariate Gaussian.
+    """
+    # Ensure confidence level is between 0 and 1
+    if not 0 <= confidence_level <= 1:
+        raise ValueError("Confidence level must be between 0 and 1.")
+
+    # Use the Percent-Point Function (PPF), which is the inverse of the CDF, to get the z-score.
+    # Since our distribution is symmetric, we get the z-score for 1 minus half of the (1-confidence).
+    return norm.ppf(1 - (1 - confidence_level) / 2)
+
+
+def nstd_to_confidence(nstd: float) -> float:
+    """
+    Convert number of standard deviations (z-score) to a confidence level for a univariate Gaussian.
+    """
+    # Using the CDF to get the confidence level for the given z-score.
+    # Since our distribution is symmetric, we will subtract the left tail and multiply by 2.
+    return 2 * (norm.cdf(nstd) - 0.5)
