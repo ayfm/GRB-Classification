@@ -105,18 +105,26 @@ def compute_mahalanobis_distance(
         - If covar is None, it is calculated as the covariance matrix of the input data.
     """
 
+    # get size of the data
+    N, d = X.shape if len(X.shape) > 1 else (X.shape[0], 1)
+
     # check if mean is given
     if mean is None:
         mean = np.mean(X, axis=0)
     # check if covar is given
     if covar is None:
-        covar = np.cov(X.T)
-
-    # get size of the data
-    N, d = X.shape
+        covar = (
+            np.cov(X, rowvar=False, ddof=0) if len(X.shape) > 1 else np.var(X, ddof=0)
+        )
 
     # check dimensions
     assert mean.shape in ((1, d), (d,)), "Mean shape is not correct"
+
+    # handle 1-dimensional data
+    if d == 1:
+        # For 1D data, Mahalanobis distance simplifies to abs difference divided by standard deviation
+        return np.abs(X.flatten() - mean) / np.sqrt(covar)
+
     assert covar.shape == (d, d), "Covariance shape is not correct"
 
     # reshape mean
@@ -161,7 +169,7 @@ def silhouette_samples_mahalanobis(
     n_clusters = len(cluster_labels)
 
     # get size of the data
-    N, d = X.shape
+    N, d = X.shape if len(X.shape) > 1 else (X.shape[0], 1)
 
     # if there is only one cluster, we cannot calculate silhouette coefficients
     if n_clusters == 1:
@@ -172,18 +180,14 @@ def silhouette_samples_mahalanobis(
         means = np.array([np.mean(X[labels == i], axis=0) for i in cluster_labels])
     # check if cluster covariances' are given
     if covars is None:
-        cov_matrix = np.array([np.cov(X[labels == i].T) for i in cluster_labels])
-        if d == 1:
-            cov_matrix = cov_matrix[:, np.newaxis, np.newaxis]
-        covars = cov_matrix
-
-    # check dimensions of means
-    # The dimension must be (n_clusters, d)
-    assert means.shape == (n_clusters, d), "Means shape is not correct"
-
-    # check dimensions of covars
-    # The dimension must be (n_clusters, d, d)
-    assert covars.shape == (n_clusters, d, d), "Covariances shape is not correct"
+        covars = np.array(
+            [
+                np.cov(X, rowvar=False, ddof=0)
+                if len(X.shape) > 1
+                else np.var(X, ddof=0)
+                for i in cluster_labels
+            ]
+        )
 
     # create distance array
     mah_dist_arr = np.zeros((N, n_clusters))
