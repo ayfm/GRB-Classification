@@ -160,6 +160,9 @@ def silhouette_samples_mahalanobis(
     # how many clusters?
     n_clusters = len(cluster_labels)
 
+    # get size of the data
+    N, d = X.shape
+
     # if there is only one cluster, we cannot calculate silhouette coefficients
     if n_clusters == 1:
         raise ValueError("Cannot calculate silhouette coefficients for one cluster")
@@ -169,10 +172,10 @@ def silhouette_samples_mahalanobis(
         means = np.array([np.mean(X[labels == i], axis=0) for i in cluster_labels])
     # check if cluster covariances' are given
     if covars is None:
-        covars = np.array([np.cov(X[labels == i].T) for i in cluster_labels])
-
-    # get size of the data
-    N, d = X.shape
+        cov_matrix = np.array([np.cov(X[labels == i].T) for i in cluster_labels])
+        if d == 1:
+            cov_matrix = cov_matrix[:, np.newaxis, np.newaxis]
+        covars = cov_matrix
 
     # check dimensions of means
     # The dimension must be (n_clusters, d)
@@ -203,7 +206,7 @@ def silhouette_samples_mahalanobis(
     b_x = mah_dist_arr.min(axis=1).reshape(-1, 1)
 
     # calculate silhouette coeffs
-    sil_coeffs = (b_x - a_x) / np.hstack((b_x, a_x)).max(axis=1).reshape(-1, 1)
+    sil_coeffs = (b_x - a_x) / np.maximum(b_x, a_x)
 
     # return silhouette coeffs
     return sil_coeffs
@@ -349,9 +352,20 @@ def gap_statistics(
     # set the random state
     _set_seed(random_state)
 
+    # if the data is just a column vector, or row vector, make it flattened
+    if X.shape[1] == 1 or X.shape[0] == 1:
+        X = X.flatten()
+
+    # get min and max values for each feature
+    xmin = np.min(X, axis=0)
+    xmax = np.max(X, axis=0)
+
     for i in range(n_repeat):
         # Generate a reference dataset
-        ref_X = np.random.uniform(np.min(X, axis=0), np.max(X, axis=0), X.shape)
+        ref_X = np.random.uniform(xmin, xmax, X.shape)
+        # reshape if the data is 1-dimensional
+        if len(ref_X.shape) == 1:
+            ref_X = ref_X.reshape(-1, 1)
 
         # Fit the model to the reference data and get the labels
         ref_labels = clusterer.fit_predict(ref_X)
