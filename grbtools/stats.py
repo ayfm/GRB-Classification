@@ -21,7 +21,7 @@ from sklearn.metrics import silhouette_samples
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
 
-from grbtools import env
+from . import env
 
 # get logger
 logger = env.get_logger()
@@ -326,7 +326,7 @@ def gap_statistics(
         The clusterer to use for the data. If `None`, `KMeans` with the same number of clusters as the labels will be used.
 
     n_repeat : int, optional
-        Number of times to generate a reference dataset and compute its dispersion. Default is 10.
+        Number of times to generate a reference dataset and compute its dispersion. Default is 100.
 
     random_state : int or None, optional
         Determines random number generation for dataset creation. Pass an int for reproducible output across multiple
