@@ -263,9 +263,11 @@ def silhouette_score(
     return {"mean": mean_coeff, "coeffs": sample_coeffs}
 
 
-def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
+def intra_cluster_dispersion(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
     """
-    Compute the total intra-cluster dispersion (within-cluster sum of squares) for the given data and labels.
+    Compute the total intra-cluster dispersion for the given data and labels based on the specified distance metric.
 
     Parameters
     ----------
@@ -275,19 +277,43 @@ def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
     labels : np.ndarray, shape = [n_samples]
         The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
 
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
     Returns
     -------
     float:
         The total intra-cluster dispersion for the given data and labels. This is the sum of the squared distances of each
-        point to the centroid of its assigned cluster.
+        point to the centroid of its assigned cluster based on the specified distance metric.
 
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
+
+    if metric not in ["Euclidean", "Mahalanobis"]:
+        raise ValueError(
+            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
+        )
+
     clusters = np.unique(labels)
     dispersion = 0
+
     for cluster in clusters:
         cluster_points = X[labels == cluster]
-        centroid = cluster_points.mean(axis=0)
-        dispersion += ((cluster_points - centroid) ** 2).sum()
+
+        if metric == "Euclidean":
+            centroid = cluster_points.mean(axis=0)
+            dispersion += ((cluster_points - centroid) ** 2).sum()
+
+        elif metric == "Mahalanobis":
+            cluster_mean = np.mean(cluster_points, axis=0)
+            cluster_cov = np.cov(cluster_points, rowvar=False)
+            mah_dists = compute_mahalanobis_distance(
+                cluster_points, mean=cluster_mean, covar=cluster_cov
+            )
+            dispersion += np.sum(mah_dists**2)
 
     return dispersion
 
