@@ -449,9 +449,11 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     return dbs(X, labels)
 
 
-def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
+def calinski_harabasz_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
     """
-    Compute the Calinski-Harabasz score for a clustering result.
+    Compute the Calinski-Harabasz score based on the specified distance metric for a clustering result.
 
     The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of
     between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering.
@@ -470,18 +472,51 @@ def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
     labels : array-like, shape = [n_samples]
         Cluster labels for each sample in the input data.
 
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
     Returns
     -------
     calinski_harabasz : float
         The Calinski-Harabasz score for the input clustering.
+
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
-    # how many clusters?
+
+    if metric not in ["Euclidean", "Mahalanobis"]:
+        raise ValueError(
+            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
+        )
+
+    n_samples, _ = X.shape
     n_clusters = len(set(labels))
-    # if there is only one cluster, we cannot calculate Calinski-Harabasz score
+
+    # Return NaN for a single cluster as we can't calculate the CH score
     if n_clusters == 1:
         return np.nan
 
-    return chs(X, labels)
+    # Compute overall dispersion using intra-cluster dispersion
+    total_dispersion = intra_cluster_dispersion(X, np.zeros_like(labels), metric=metric)
+
+    # Compute intra-cluster dispersion
+    intra_dispersion = intra_cluster_dispersion(X, labels, metric=metric)
+
+    # Between cluster dispersion is the difference between total dispersion and intra-cluster dispersion
+    between_dispersion = total_dispersion - intra_dispersion
+
+    # if intra-cluster dispersion is 0, return 1.0
+    if intra_dispersion == 0:
+        score = 1.0
+    else:
+        # Calculate the CH score using the Mahalanobis-based dispersions
+        score = (between_dispersion / (n_clusters - 1)) / (
+            intra_dispersion / (n_samples - n_clusters)
+        )
+
+    return score
 
 
 def hopkins_statistic(
