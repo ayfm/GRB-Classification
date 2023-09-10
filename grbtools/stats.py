@@ -38,7 +38,7 @@ def _set_seed(seed: Union[int, None]) -> None:
         np.random.seed(seed)
 
 
-def _check_metric(metric: str) -> str:
+def _check_distance_metric(metric: str) -> str:
     """
     Check if the provided metric is valid.
 
@@ -276,7 +276,7 @@ def silhouette_score(
 
     """
     # Validate metric choice
-    metric = _check_metric(metric)
+    metric = _check_distance_metric(metric)
 
     # how many clusters?
     n_clusters = len(set(labels))
@@ -330,7 +330,7 @@ def intra_cluster_dispersion(
     """
 
     # Validate metric choice
-    metric = _check_metric(metric)
+    metric = _check_distance_metric(metric)
 
     clusters = np.unique(labels)
     dispersion = 0
@@ -388,7 +388,7 @@ def inter_cluster_dispersion(
     X = np.atleast_2d(X)
 
     # Validate metric choice
-    metric = _check_metric(metric)
+    metric = _check_distance_metric(metric)
 
     # Compute the overall mean of the data
     overall_mean = np.mean(X, axis=0)
@@ -561,7 +561,7 @@ def davies_bouldin_score(
         If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
     # check metric
-    metric = _check_metric(metric)
+    metric = _check_distance_metric(metric)
 
     n_samples, _ = X.shape
     unique_labels = np.unique(labels)
@@ -655,7 +655,7 @@ def calinski_harabasz_score(
     """
 
     # Validate metric choice
-    metric = _check_metric(metric)
+    metric = _check_distance_metric(metric)
 
     # Determine the number of samples and clusters
     n_samples = X.shape[0]
