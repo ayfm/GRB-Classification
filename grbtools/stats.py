@@ -15,7 +15,6 @@ from scipy.stats import (
     norm,
 )
 from sklearn.cluster import KMeans
-from sklearn.metrics import calinski_harabasz_score as chs
 from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.mixture import GaussianMixture
@@ -322,6 +321,88 @@ def intra_cluster_dispersion(
     return dispersion
 
 
+def inter_cluster_dispersion(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+):
+    """
+    Calculate the inter-cluster dispersion for the provided data and labels using the specified metric.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The dataset, with shape (n_samples, n_features).
+        It represents the input samples where each row is a sample and each column is a feature of the sample.
+        Can handle 1-dimensional data (n_samples,) or n-dimensional data.
+
+    labels : np.ndarray
+        Cluster assignments for each data point. Shape is (n_samples,).
+
+    metric : str, optional
+        The type of distance metric to use. Can be 'Euclidean' or 'Mahalanobis'.
+        Default is 'Euclidean'.
+
+    Returns
+    -------
+    float
+        The computed inter-cluster dispersion.
+
+    Raises
+    ------
+    ValueError
+        If the provided metric is not one of {'Euclidean', 'Mahalanobis'}.
+    """
+
+    # Ensure the input data is at least 2D
+    X = np.atleast_2d(X)
+
+    # Validate the metric choice
+    if metric not in ["Euclidean", "Mahalanobis"]:
+        raise ValueError(
+            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
+        )
+
+    # Compute the overall mean of the data
+    overall_mean = np.mean(X, axis=0)
+
+    # Initialize the inter-cluster dispersion
+    inter_disp = 0.0
+
+    # Precompute the inverse covariance matrix for Mahalanobis distance
+    if metric == "Mahalanobis":
+        if X.shape[1] == 1:  # Check if the data is 1-dimensional
+            # In 1D, the inverse covariance matrix is just 1/variance
+            inv_cov_matrix = 1.0 / np.var(X)
+        else:
+            cov_matrix = np.cov(X, rowvar=False)
+            inv_cov_matrix = np.linalg.inv(cov_matrix)
+
+    # Loop through each unique cluster label
+    for cluster in np.unique(labels):
+        cluster_points = X[labels == cluster]
+        # Number of points in the current cluster
+        num_points_in_cluster = cluster_points.shape[0]
+        # Mean of the current cluster
+        cluster_mean = np.mean(cluster_points, axis=0)
+
+        # Compute the squared distance between the cluster mean and the overall mean
+        if metric == "Euclidean":
+            squared_distance = np.sum((cluster_mean - overall_mean) ** 2)
+        else:  # metric == "Mahalanobis"
+            squared_distance = (
+                cdist(
+                    cluster_mean.reshape(1, -1),
+                    overall_mean.reshape(1, -1),
+                    VI=inv_cov_matrix,
+                    metric="mahalanobis",
+                )[0][0]
+                ** 2
+            )
+
+        inter_disp += num_points_in_cluster * squared_distance
+
+    return inter_disp
+
+
 def gap_statistics(
     X: np.ndarray,
     labels: np.ndarray,
@@ -486,35 +567,34 @@ def calinski_harabasz_score(
         If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
 
+    # Validate metric choice
     if metric not in ["Euclidean", "Mahalanobis"]:
         raise ValueError(
-            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
+            f"Unsupported distance metric: {metric}. Options are 'Euclidean' or 'Mahalanobis'."
         )
 
-    n_samples, _ = X.shape
+    # Determine the number of samples and clusters
+    n_samples = X.shape[0]
     n_clusters = len(set(labels))
 
-    # Return NaN for a single cluster as we can't calculate the CH score
+    # Single cluster scenarios result in undefined CH score
     if n_clusters == 1:
         return np.nan
 
-    # Compute overall dispersion using intra-cluster dispersion
-    total_dispersion = intra_cluster_dispersion(X, np.zeros_like(labels), metric=metric)
+    # Compute between-cluster dispersion
+    between_dispersion = inter_cluster_dispersion(X, labels, metric=metric)
 
-    # Compute intra-cluster dispersion
+    # Compute within-cluster dispersion
     intra_dispersion = intra_cluster_dispersion(X, labels, metric=metric)
 
-    # Between cluster dispersion is the difference between total dispersion and intra-cluster dispersion
-    between_dispersion = total_dispersion - intra_dispersion
-
-    # if intra-cluster dispersion is 0, return 1.0
+    # If there's no intra-cluster dispersion, default the score to 1.0
     if intra_dispersion == 0:
-        score = 1.0
-    else:
-        # Calculate the CH score using the Mahalanobis-based dispersions
-        score = (between_dispersion / (n_clusters - 1)) / (
-            intra_dispersion / (n_samples - n_clusters)
-        )
+        return 1.0
+
+    # Calculate the CH score
+    score = (between_dispersion / (n_clusters - 1)) / (
+        intra_dispersion / (n_samples - n_clusters)
+    )
 
     return score
 
