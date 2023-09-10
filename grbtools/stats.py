@@ -608,7 +608,7 @@ def davies_bouldin_score(
                     )
                     d = mahalanobis_distance(
                         centroids[i].reshape(1, -1), centroids[j], pooled_cov
-                    )[0]
+                    )[0][0]
                 ratio = (s[i] + s[j]) / d
                 max_ratio = max(max_ratio, ratio)
         db += max_ratio
