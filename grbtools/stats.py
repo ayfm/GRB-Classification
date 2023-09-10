@@ -112,9 +112,10 @@ def compute_mahalanobis_distance(
         mean = np.mean(X, axis=0)
     # check if covar is given
     if covar is None:
-        covar = (
-            np.cov(X, rowvar=False, ddof=0) if len(X.shape) > 1 else np.var(X, ddof=0)
-        )
+        if d == 1:
+            covar = np.var(X, ddof=0)
+        else:
+            covar = np.cov(X, rowvar=False, ddof=0)
 
     # check dimensions
     assert mean.shape in ((1, d), (d,)), "Mean shape is not correct"
