@@ -80,62 +80,64 @@ def BIC(model: GaussianMixture, data: np.ndarray) -> float:
 
 
 def compute_mahalanobis_distance(
-    X: np.ndarray,
-    mean: Union[np.ndarray, None] = None,
-    covar: Union[np.ndarray, None] = None,
+    X: np.ndarray, mean: Optional[np.ndarray] = None, covar: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
     Calculates the Mahalanobis distance between data points and means.
 
-    Args:
-        X (np.ndarray): Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
-        mean (Union[np.ndarray, None], optional): Mean values to use for computing the distance. If None, the mean will be calculated from the input data. Defaults to None.
-        covar (Union[np.ndarray, None], optional): Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated from the input data. Defaults to None.
+    Parameters:
+    -----------
+    X : np.ndarray
+        Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
+
+    mean : np.ndarray, optional
+        Mean values to use for computing the distance. If None, the mean will be calculated from the input data.
+
+    covar : np.ndarray, optional
+        Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated
+        from the input data.
 
     Returns:
-         np.ndarray: Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
+    --------
+    np.ndarray:
+        Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
 
     Raises:
-        AssertionError: If the shape of the mean or covariance matrix is not correct.
+    -------
+    ValueError:
+        If the shape of the mean or covariance matrix is not correct.
 
     Notes:
-        - The Mahalanobis distance is a measure of the distance between a data point and a distribution, taking into account the covariance structure of the distribution.
-        - If mean is None, it is calculated as the mean of the input data along the specified axis.
-        - If covar is None, it is calculated as the covariance matrix of the input data.
+    ------
+    - The Mahalanobis distance is a measure of the distance between a data point and a distribution, taking into
+      account the covariance structure of the distribution.
     """
-
-    # get size of the data
     N, d = X.shape if len(X.shape) > 1 else (X.shape[0], 1)
 
-    # check if mean is given
+    # Calculate mean and covariance if not provided
     if mean is None:
         mean = np.mean(X, axis=0)
-    # check if covar is given
     if covar is None:
         if d == 1:
             covar = np.var(X, ddof=0)
         else:
             covar = np.cov(X, rowvar=False, ddof=0)
 
-    # check dimensions
-    assert mean.shape in ((1, d), (d,)), "Mean shape is not correct"
+    # Validate shapes
+    if mean.shape not in ((d,), (1, d)):
+        raise ValueError("Mean shape is not correct.")
+    if d > 1 and covar.shape != (d, d):
+        raise ValueError("Covariance matrix shape is not correct.")
 
-    # handle 1-dimensional data
+    # Handle 1-dimensional data
     if d == 1:
-        # For 1D data, Mahalanobis distance simplifies to abs difference divided by standard deviation
         return np.abs(X.flatten() - mean) / np.sqrt(covar)
 
-    assert covar.shape == (d, d), "Covariance shape is not correct"
-
-    # reshape mean
     mean = mean.reshape(1, -1)
-
-    # get inverse covariance matrix
     icovar = np.linalg.inv(covar)
-    # calculate mahalanobis distance of each data point
-    mah_dist = cdist(X, mean, VI=icovar, metric="mahalanobis").reshape(1, -1)
+    delta = X - mean
+    mah_dist = np.sqrt(np.sum(np.dot(delta, icovar) * delta, axis=1)).reshape(1, -1)
 
-    # return distance
     return mah_dist
 
 
