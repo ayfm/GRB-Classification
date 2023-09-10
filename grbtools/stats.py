@@ -112,7 +112,7 @@ def compute_mahalanobis_distance(
     - The Mahalanobis distance is a measure of the distance between a data point and a distribution, taking into
       account the covariance structure of the distribution.
     """
-    N, d = X.shape if len(X.shape) > 1 else (X.shape[0], 1)
+    N, d = X.shape if len(X.shape) > 1 else (1, X.shape[0])
 
     # Calculate mean and covariance if not provided
     if mean is None:
@@ -122,6 +122,10 @@ def compute_mahalanobis_distance(
             covar = np.var(X, ddof=0)
         else:
             covar = np.cov(X, rowvar=False, ddof=0)
+
+    # Reshape mean if necessary
+    if len(mean.shape) == 1:
+        mean = mean.reshape(1, -1)
 
     # Validate shapes
     if mean.shape not in ((d,), (1, d)):
@@ -171,7 +175,7 @@ def silhouette_samples_mahalanobis(
     n_clusters = len(cluster_labels)
 
     # get size of the data
-    N, d = X.shape if len(X.shape) > 1 else (X.shape[0], 1)
+    N, d = X.shape if len(X.shape) > 1 else (1, X.shape[0])
 
     # if there is only one cluster, we cannot calculate silhouette coefficients
     if n_clusters == 1:
@@ -1489,7 +1493,9 @@ def pooled_covariance(
 
     # If input is matrix, validate shapes
     if not np.isscalar(cov1):
-        if cov1.shape != cov2.shape or cov1.shape[0] != cov1.shape[1]:
+        if cov1.shape != cov2.shape or (
+            len(cov1.shape) == 2 and cov1.shape[0] != cov1.shape[1]
+        ):
             raise ValueError(
                 "Covariance matrices should be square and have the same shape"
             )
