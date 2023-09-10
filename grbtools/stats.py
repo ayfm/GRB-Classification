@@ -1441,6 +1441,63 @@ def normalize(x: np.ndarray, invert: bool = False):
     return x
 
 
+from typing import Union
+import numpy as np
+
+
+def pooled_covariance(
+    cov1: Union[np.ndarray, float],
+    cov2: Union[np.ndarray, float],
+    size1: int,
+    size2: int,
+) -> Union[np.ndarray, float]:
+    """
+    Compute the pooled covariance.
+
+    The pooled covariance is a weighted average of two covariances. It's used to estimate
+    the common covariance of two populations when they're assumed to be the same.
+
+    Parameters
+    ----------
+    cov1 : np.ndarray or float
+        The covariance matrix or variance of the first group. If scalar, it represents variance.
+
+    cov2 : np.ndarray or float
+        The covariance matrix or variance of the second group. If scalar, it represents variance.
+
+    size1 : int
+        The size (number of observations) of the first group.
+
+    size2 : int
+        The size (number of observations) of the second group.
+
+    Returns
+    -------
+    Union[np.ndarray, float]
+        The pooled covariance. Returns a matrix if inputs were matrices, and a scalar if inputs were scalars.
+
+    Raises
+    ------
+    ValueError:
+        If the inputs are inconsistently scalars/matrices, or if the matrices are not square or of different shapes.
+    """
+    # Check for consistent input types
+    if np.isscalar(cov1) != np.isscalar(cov2):
+        raise ValueError("Both covariances should be either scalars or matrices")
+
+    # If input is matrix, validate shapes
+    if not np.isscalar(cov1):
+        if cov1.shape != cov2.shape or cov1.shape[0] != cov1.shape[1]:
+            raise ValueError(
+                "Covariance matrices should be square and have the same shape"
+            )
+
+    # Compute the pooled covariance
+    cov_pooled = ((size1 - 1) * cov1 + (size2 - 1) * cov2) / (size1 + size2 - 2)
+
+    return cov_pooled
+
+
 def compute_bin_size(data: np.array, method: str = "freedman") -> int:
     """
     Computes the efficient number of bins for a histogram using the specified method.
