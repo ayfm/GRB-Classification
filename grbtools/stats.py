@@ -181,7 +181,7 @@ def silhouette_samples_mahalanobis(
     if covars is None:
         covars = np.array(
             [
-                np.cov(X, rowvar=False, ddof=0)
+                np.cov(X[labels == i], rowvar=False, ddof=0)
                 if len(X.shape) > 1
                 else np.var(X, ddof=0)
                 for i in cluster_labels
