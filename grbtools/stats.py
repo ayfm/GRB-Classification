@@ -15,7 +15,6 @@ from scipy.stats import (
     norm,
 )
 from sklearn.cluster import KMeans
-from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
 from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
@@ -110,7 +109,7 @@ def BIC(model: GaussianMixture, data: np.ndarray) -> float:
     return model.bic(data)
 
 
-def compute_mahalanobis_distance(
+def mahalanobis_distance(
     X: np.ndarray, mean: Optional[np.ndarray] = None, covar: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -232,9 +231,7 @@ def silhouette_samples_mahalanobis(
     # calculate mahalanobis distance for each cluster
     for i in range(n_clusters):
         # calculate mahalanobis distance based on the mean and covariance matrix
-        mah_dist_arr[:, i] = compute_mahalanobis_distance(
-            X, mean=means[i], covar=covars[i]
-        )
+        mah_dist_arr[:, i] = mahalanobis_distance(X, mean=means[i], covar=covars[i])
 
     # calculate intra-cluster distance (a(x))
     a_x = np.array([mah_dist_arr[i, labels[i]] for i in range(N)]).reshape(-1, 1)
@@ -256,7 +253,7 @@ def silhouette_samples_mahalanobis(
 def silhouette_score(
     X: np.ndarray,
     labels: np.ndarray,
-    metric: Literal["Euclidean", "Mahalanobis"] = None,
+    metric: str = "Euclidean",
 ) -> Dict:
     """
     Calculates the silhouette score for a clustering.
@@ -278,6 +275,9 @@ def silhouette_score(
         ValueError: If the metric is not one of {"Euclidean", "Mahalanobis"}.
 
     """
+    # Validate metric choice
+    metric = _check_metric(metric)
+
     # how many clusters?
     n_clusters = len(set(labels))
 
@@ -285,14 +285,10 @@ def silhouette_score(
     if n_clusters == 1:
         return {"mean": np.nan, "coeffs": np.nan}
 
-    # default metric is Euclidean
-    if metric is None:
-        metric = "Euclidean"
-
-    if metric == "Euclidean":
+    if metric == "euclidean":
         sample_coeffs = silhouette_samples(X, labels, metric="euclidean")
 
-    elif metric == "Mahalanobis":
+    elif metric == "mahalanobis":
         sample_coeffs = silhouette_samples_mahalanobis(X, labels)
 
     else:
@@ -333,10 +329,8 @@ def intra_cluster_dispersion(
         If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
 
-    if metric not in ["Euclidean", "Mahalanobis"]:
-        raise ValueError(
-            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
-        )
+    # Validate metric choice
+    metric = _check_metric(metric)
 
     clusters = np.unique(labels)
     dispersion = 0
@@ -344,14 +338,14 @@ def intra_cluster_dispersion(
     for cluster in clusters:
         cluster_points = X[labels == cluster]
 
-        if metric == "Euclidean":
+        if metric == "euclidean":
             centroid = cluster_points.mean(axis=0)
             dispersion += ((cluster_points - centroid) ** 2).sum()
 
-        elif metric == "Mahalanobis":
+        elif metric == "mahalanobis":
             cluster_mean = np.mean(cluster_points, axis=0)
             cluster_cov = np.cov(cluster_points, rowvar=False)
-            mah_dists = compute_mahalanobis_distance(
+            mah_dists = mahalanobis_distance(
                 cluster_points, mean=cluster_mean, covar=cluster_cov
             )
             dispersion += np.sum(mah_dists**2)
@@ -393,11 +387,8 @@ def inter_cluster_dispersion(
     # Ensure the input data is at least 2D
     X = np.atleast_2d(X)
 
-    # Validate the metric choice
-    if metric not in ["Euclidean", "Mahalanobis"]:
-        raise ValueError(
-            f"Unsupported distance metric: {metric}. Choose either 'Euclidean' or 'Mahalanobis'."
-        )
+    # Validate metric choice
+    metric = _check_metric(metric)
 
     # Compute the overall mean of the data
     overall_mean = np.mean(X, axis=0)
@@ -406,7 +397,7 @@ def inter_cluster_dispersion(
     inter_disp = 0.0
 
     # Precompute the inverse covariance matrix for Mahalanobis distance
-    if metric == "Mahalanobis":
+    if metric == "mahalanobis":
         if X.shape[1] == 1:  # Check if the data is 1-dimensional
             # In 1D, the inverse covariance matrix is just 1/variance
             inv_cov_matrix = 1.0 / np.var(X)
@@ -423,7 +414,7 @@ def inter_cluster_dispersion(
         cluster_mean = np.mean(cluster_points, axis=0)
 
         # Compute the squared distance between the cluster mean and the overall mean
-        if metric == "Euclidean":
+        if metric == "euclidean":
             squared_distance = np.sum((cluster_mean - overall_mean) ** 2)
         else:  # metric == "Mahalanobis"
             squared_distance = (
@@ -534,40 +525,6 @@ def gap_statistics(
     return {"gap": gap, "err": gap_err}
 
 
-def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
-    """
-    Compute the Davies-Bouldin score for a clustering result.
-
-    The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity'
-    between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances.
-    Thus, clusters which are farther apart and less dispersed will result in a better score.
-
-    The minimum score is 0, with smaller values indicating better clustering.
-    The maximum score is unbounded, with larger values indicating worse clustering.
-    The DBI is undefined for a single cluster.
-
-    Parameters
-    ----------
-    X : array-like, shape = [n_samples, n_dimensions]
-        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
-
-    labels : array-like, shape = [n_samples]
-        Cluster labels for each sample in the input data.
-
-    Returns
-    -------
-    davies_bouldin : float
-        The Davies-Bouldin score for the input clustering.
-    """
-    # how many clusters?
-    n_clusters = len(set(labels))
-    # if there is only one cluster, we cannot calculate Davies-Bouldin score
-    if n_clusters == 1:
-        return np.nan
-
-    return dbs(X, labels)
-
-
 def davies_bouldin_score(
     X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
 ) -> float:
@@ -634,7 +591,7 @@ def davies_bouldin_score(
         ]
     elif metric == "mahalanobis":
         s = [
-            np.mean([compute_mahalanobis_distance(p.reshape(1, -1), c, cov) for p in k])
+            np.mean([mahalanobis_distance(p.reshape(1, -1), c, cov) for p in k])
             for k, c, cov in zip(cluster_k, centroids, covs)
         ]
 
@@ -649,7 +606,7 @@ def davies_bouldin_score(
                     pooled_cov = pooled_covariance(
                         covs[i], covs[j], len(cluster_k[i]), len(cluster_k[j])
                     )
-                    d = compute_mahalanobis_distance(
+                    d = mahalanobis_distance(
                         centroids[i].reshape(1, -1), centroids[j], pooled_cov
                     )[0]
                 ratio = (s[i] + s[j]) / d
@@ -698,10 +655,7 @@ def calinski_harabasz_score(
     """
 
     # Validate metric choice
-    if metric not in ["Euclidean", "Mahalanobis"]:
-        raise ValueError(
-            f"Unsupported distance metric: {metric}. Options are 'Euclidean' or 'Mahalanobis'."
-        )
+    metric = _check_metric(metric)
 
     # Determine the number of samples and clusters
     n_samples = X.shape[0]
