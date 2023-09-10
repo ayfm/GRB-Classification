@@ -483,11 +483,11 @@ def gap_statistics(
         ref_labels = clusterer.fit_predict(ref_X)
 
         # Compute the dispersion for the reference data
-        ref_disp = intra_cluster_dispersion(ref_X, ref_labels)
+        ref_disp = intra_cluster_dispersion(ref_X, ref_labels, metric="Euclidean")
         ref_disps[i] = np.log(ref_disp)
 
     # Compute the dispersion for the original data
-    orig_disp = intra_cluster_dispersion(X, labels)
+    orig_disp = intra_cluster_dispersion(X, labels, metric="Euclidean")
     orig_disp = np.log(orig_disp)
 
     # Compute the gap statistic
