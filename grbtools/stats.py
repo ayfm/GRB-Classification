@@ -39,6 +39,37 @@ def _set_seed(seed: Union[int, None]) -> None:
         np.random.seed(seed)
 
 
+def _check_metric(metric: str) -> str:
+    """
+    Check if the provided metric is valid.
+
+    Parameters
+    ----------
+    metric : str
+        The distance metric to use. Can be 'Euclidean' or 'Mahalanobis'.
+
+    Returns
+    -------
+    str
+        The validated metric (lowercase).
+
+    Raises
+    ------
+    ValueError
+        If the metric is not one of {'Euclidean', 'Mahalanobis'}.
+    """
+    # make sure that metric is lowercase
+    metric = metric.lower()
+
+    # Validate metric choice
+    if metric not in ["euclidean", "mahalanobis"]:
+        raise ValueError(
+            f"Unsupported distance metric: {metric}. Options are 'Euclidean' or 'Mahalanobis'."
+        )
+
+    return metric
+
+
 def AIC(model: GaussianMixture, data: np.ndarray) -> float:
     """
     Compute the Akaike Information Criterion (AIC) for a given GaussianMixtureModel and data.
@@ -537,11 +568,103 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     return dbs(X, labels)
 
 
+def davies_bouldin_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
+    """
+    Compute the Davies-Bouldin score for a clustering result based on the specified distance metric.
+
+    The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity'
+    between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances.
+    Thus, clusters which are farther apart and less dispersed will result in a better score.
+
+    The minimum score is 0, with smaller values indicating better clustering.
+    The maximum score is unbounded, with larger values indicating worse clustering.
+    The DBI is undefined for a single cluster.
+
+    Parameters
+    ----------
+    X : array-like, shape = [n_samples, n_dimensions]
+        Input data. Each row corresponds to a sample, and each column corresponds to a dimension of the sample.
+
+    labels : array-like, shape = [n_samples]
+        Cluster labels for each sample in the input data.
+
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
+    Returns
+    -------
+    davies_bouldin : float
+        The Davies-Bouldin score for the input clustering.
+
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
+    """
+    # check metric
+    metric = _check_metric(metric)
+
+    n_samples, _ = X.shape
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+
+    # Return NaN if only one cluster
+    if n_clusters == 1:
+        return np.nan
+
+    cluster_k = [X[labels == k] for k in unique_labels]
+    centroids = [np.mean(k, axis=0) for k in cluster_k]
+
+    # Compute covariances for Mahalanobis distance
+    covs = []
+    if metric == "mahalanobis":
+        for k in cluster_k:
+            if len(k) == 1:
+                covs.append(np.var(k, ddof=0))
+            else:
+                covs.append(np.cov(k, rowvar=False, ddof=0))
+
+    # Compute s_i for each cluster based on metric choice
+    if metric == "euclidean":
+        s = [
+            np.mean([np.linalg.norm(p - c) for p in k])
+            for k, c in zip(cluster_k, centroids)
+        ]
+    elif metric == "mahalanobis":
+        s = [
+            np.mean([compute_mahalanobis_distance(p.reshape(1, -1), c, cov) for p in k])
+            for k, c, cov in zip(cluster_k, centroids, covs)
+        ]
+
+    db = 0
+    for i in range(n_clusters):
+        max_ratio = float("-inf")
+        for j in range(n_clusters):
+            if i != j:
+                if metric == "euclidean":
+                    d = np.linalg.norm(centroids[i] - centroids[j])
+                else:  # For mahalanobis
+                    pooled_cov = pooled_covariance(
+                        covs[i], covs[j], len(cluster_k[i]), len(cluster_k[j])
+                    )
+                    d = compute_mahalanobis_distance(
+                        centroids[i].reshape(1, -1), centroids[j], pooled_cov
+                    )[0]
+                ratio = (s[i] + s[j]) / d
+                max_ratio = max(max_ratio, ratio)
+        db += max_ratio
+
+    # Calculate Davies-Bouldin score
+    return db / n_clusters
+
+
 def calinski_harabasz_score(
     X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
 ) -> float:
     """
-    Compute the Calinski-Harabasz score based on the specified distance metric for a clustering result.
+    Compute the Calinski-Harabasz score for a clustering result based on the specified distance metric.
 
     The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of
     between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering.
