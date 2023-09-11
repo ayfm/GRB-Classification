@@ -1,6 +1,7 @@
 import os
+from typing import List
 import coloredlogs
-import logging 
+import logging
 
 # get current directory of the package
 DIR_PACKAGE = os.path.dirname(os.path.realpath(__file__))
@@ -21,27 +22,25 @@ DIR_FIGURES = os.path.join("..", "figures")
 DIR_MODELS = os.path.join("..", "models")
 
 
-
 # default log level
 _LOG_LEVEL = "INFO"
 
 # log formats
-_LOG_FORMAT = (
-    "[%(levelname)-.1s]: %(message)s"
-)
+_LOG_FORMAT = "[%(levelname)-.1s]: %(message)s"
 
 # the logger map;
 # keys are name of the loggers, values are the logger objects
 _loggers = dict()
 
+
 # get logger
 def get_logger():
     # return if logger is already created
-    if 'root' in _loggers:
-        return _loggers['root']
+    if "root" in _loggers:
+        return _loggers["root"]
 
     # get root logger
-    logger = logging.getLogger('root')
+    logger = logging.getLogger("root")
     # create stream handler
     stream_handler = logging.StreamHandler()
     # set log level
@@ -53,10 +52,10 @@ def get_logger():
     # add handler to the logger
     logger.addHandler(stream_handler)
 
-    # set log level 
+    # set log level
     logger.setLevel(_LOG_LEVEL)
-    
+
     # set root logger
-    _loggers['root'] = logger
-    
+    _loggers["root"] = logger
+
     return logger

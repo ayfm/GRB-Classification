@@ -2,11 +2,12 @@ import os
 import pickle
 from typing import Any, Literal, Dict, Union
 
+import numpy as np
 from numpy.random import RandomState
 from numpy.typing import ArrayLike
 from sklearn.mixture import GaussianMixture as _GMM
 
-from grbtools import env
+from . import env
 
 # get logger
 logger = env.get_logger()
@@ -146,7 +147,7 @@ class GaussianMixtureModel(_GMM):
         Returns:
             None. Modifies the labels of the GMM model in-place.
         """
-        logger.info("Sorting clusters by means.")
+        logger.debug("Sorting clusters by means.")
 
         # Raise an exception if the model is not fitted
         if not self.converged_:
@@ -181,7 +182,7 @@ class GaussianMixtureModel(_GMM):
         """
 
         # print log
-        logger.info(f"Fitting model: {self.__str__()}")
+        logger.debug(f"Fitting model: {self.__str__()}")
         # fit the model
         super().fit(X, y)
         # then, sort the clusters if required
@@ -242,3 +243,27 @@ class GaussianMixtureModel(_GMM):
             loaded_model = pickle.load(file)
 
         return loaded_model
+
+    def get_cluster_params(self) -> dict:
+        """ """
+        # for each clusters
+        cluster_params = {}
+        for i in range(self.n_components):
+            cluster_params[i] = {
+                "weight": self.weights_[i],
+                "mean": self.means_[i],
+            }
+            if self.covariance_type == "spherical":
+                cluster_params[i]["covariance"] = np.diag(
+                    self.covariances_[i], self.covariances_[i]
+                )
+            elif self.covariance_type == "tied":
+                cluster_params[i]["covariance"] = self.covariances_.copy()
+
+            elif self.covariance_type == "diag":
+                cluster_params[i]["covariance"] = np.diag(self.covariances_[i])
+
+            elif self.covariance_type == "full":
+                cluster_params[i]["covariance"] = self.covariances_[i].copy()
+
+        return cluster_params
