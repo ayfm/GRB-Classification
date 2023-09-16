@@ -244,26 +244,26 @@ class GaussianMixtureModel(_GMM):
 
         return loaded_model
 
-    def get_cluster_params(self) -> dict:
+    def get_component_params(self) -> dict:
         """ """
         # for each clusters
-        cluster_params = {}
+        component_params = {}
         for i in range(self.n_components):
-            cluster_params[i] = {
+            component_params[i] = {
                 "weight": self.weights_[i],
                 "mean": self.means_[i],
             }
             if self.covariance_type == "spherical":
-                cluster_params[i]["covariance"] = np.diag(
+                component_params[i]["covariance"] = np.diag(
                     self.covariances_[i], self.covariances_[i]
                 )
             elif self.covariance_type == "tied":
-                cluster_params[i]["covariance"] = self.covariances_.copy()
+                component_params[i]["covariance"] = self.covariances_.copy()
 
             elif self.covariance_type == "diag":
-                cluster_params[i]["covariance"] = np.diag(self.covariances_[i])
+                component_params[i]["covariance"] = np.diag(self.covariances_[i])
 
             elif self.covariance_type == "full":
-                cluster_params[i]["covariance"] = self.covariances_[i].copy()
+                component_params[i]["covariance"] = self.covariances_[i].copy()
 
-        return cluster_params
+        return component_params
