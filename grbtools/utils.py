@@ -1,6 +1,9 @@
 import os
+from typing import Dict
+
 import numpy as np
 import pandas as pd
+from scipy.optimize import linear_sum_assignment
 
 
 def create_directory(path: str) -> None:
@@ -12,6 +15,42 @@ def create_directory(path: str) -> None:
     """
     if not os.path.exists(path):
         os.makedirs(path)
+
+
+def match_gaussian_components(
+    mean_list_1st: np.ndarray, mean_list_2nd: np.ndarray
+) -> Dict[int, int]:
+    """
+    Match Gaussian components from two models based on the absolute distance between their values.
+
+    The function computes a distance matrix between the two sets of components and then
+    uses the Hungarian algorithm to solve the assignment problem, ensuring an optimal
+    matching between the components.
+
+    Parameters:
+    - mean_list_1st (np.ndarray): An array of values representing the means of components of 1st group.
+    - mean_list_2nd (np.ndarray): An array of values representing the means of components of 2nd group.
+
+    Returns:
+    - Dict[int, int]: A dictionary where keys represent indices from the first group and
+                      values represent the corresponding matched indices from the second group.
+    """
+
+    # Ensure both component groups are of the same size
+    assert len(mean_list_1st) == len(
+        mean_list_2nd
+    ), "Both component groups should have the same size."
+
+    # Calculate the distance matrix between the two sets of components
+    distance_matrix = np.array(
+        [[np.abs(s - f) for f in mean_list_1st] for s in mean_list_2nd]
+    )
+
+    # Use the Hungarian algorithm to find the optimal assignment between components
+    row_indices, col_indices = linear_sum_assignment(distance_matrix)
+
+    # Return the matched component pairs as a dictionary
+    return dict(zip(row_indices, col_indices))
 
 
 def merge_scores(scores={}):
