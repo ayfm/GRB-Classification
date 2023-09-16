@@ -58,9 +58,7 @@ def get_model_path(
     return model_path
 
 
-def get_model_name(
-    catalog_name: str, features: List[str], n_components: int, n_trial_number: int
-) -> str:
+def get_model_name(catalog_name: str, features: List[str], n_components: int) -> str:
     """
     Generates a model name based on provided parameters.
 
@@ -68,13 +66,12 @@ def get_model_name(
     - catalog_name (str): Name of the catalog.
     - features (List[str]): List of features.
     - n_components (int): Number of components.
-    - n_trial_number (int): Trial number.
 
     Returns:
     - str: A string representing the model name.
     """
     feature_string = "-".join(features)
-    return f"{catalog_name}_{feature_string}_{n_components}G_T{n_trial_number}"
+    return f"{catalog_name}_{feature_string}_{n_components}G"
 
 
 def parse_model_name(model_name: str) -> dict:
@@ -94,7 +91,6 @@ def parse_model_name(model_name: str) -> dict:
         "catalog_name": tokens[0],
         "features": tokens[1].split("-"),
         "n_components": int(tokens[2][:-1]),
-        "n_trial_number": int(tokens[3][1:]),
     }
 
 
@@ -128,97 +124,11 @@ def get_model_params(model: GaussianMixtureModel) -> dict:
     }
 
 
-def get_selected_models(
-    catalog_name: Optional[str] = None,
-    features: Optional[List[str]] = None,
-    n_components: Optional[int] = None,
-    n_trial_number: Optional[int] = None,
-) -> Optional[pd.DataFrame]:
-    path_excel = os.path.join(env.DIR_MODELS, "selected_models.xlsx")
-
-    if not os.path.exists(path_excel):
-        return None
-
-    # read excel file
-    df = pd.read_excel(path_excel, index_col=0, sheet_name="models")
-
-    # filter dataframe if catalog name is provided
-    if catalog_name is not None:
-        df = df[df["catalog_name"] == catalog_name]
-
-    # filter dataframe if features are provided
-    if features is not None:
-        df = df[df["features"] == "-".join(features)]
-
-    # filter dataframe if n_components is provided
-    if n_components is not None:
-        df = df[df["n_components"] == n_components]
-
-    # filter dataframe if n_trial_number is provided
-    if n_trial_number is not None:
-        df = df[df["n_trial_number"] == n_trial_number]
-
-    return df.copy(deep=True)
-
-
-def select_model(model_name: str):
-    # parse model name
-    model_dict = parse_model_name(model_name)
-    # get fields from dict
-    catalog_name = model_dict["catalog_name"]
-    features = model_dict["features"]
-    n_components = model_dict["n_components"]
-    n_trial_number = model_dict["n_trial_number"]
-
-    # get all selected models
-    df_selected_models = get_selected_models()
-    # if dataframe is empty, create a new one
-    if df_selected_models is None:
-        df_selected_models = pd.DataFrame(
-            columns=["catalog_name", "features", "n_components", "n_trial_number"]
-        )
-
-    # convert features to string
-    features_str = "-".join(features)
-
-    # remove all rows with same catalog name, features and n_components
-    df_selected_models = df_selected_models[
-        ~(
-            (df_selected_models["catalog_name"] == catalog_name)
-            & (df_selected_models["features"] == features_str)
-            & (df_selected_models["n_components"] == n_components)
-        )
-    ]
-
-    # add model to the dataframe
-    df_selected_models.loc[model_name] = [
-        catalog_name,
-        "-".join(features),
-        n_components,
-        n_trial_number,
-    ]
-
-    # sort dataframe by index (model names)
-    df_selected_models.sort_index(inplace=True)
-
-    # save dataframe
-    path_excel = os.path.join(env.DIR_MODELS, "selected_models.xlsx")
-    df_selected_models.to_excel(
-        path_excel,
-        index=True,
-        index_label="models",
-        sheet_name="models",
-        freeze_panes=(1, 0),
-        engine="xlsxwriter",
-    )
-
-
 def save_model(
     model: GaussianMixtureModel,
     catalog_name: str,
     features: List[str],
     n_components: int,
-    n_trial_number: int,
 ):
     """
     Save the model to disk.
@@ -228,7 +138,6 @@ def save_model(
     - catalog_name (str): Name of the catalog.
     - features (List[str]): List of features.
     - n_components (int): Number of components.
-    - n_trial_number (int): Trial number.
     """
 
     # get model name
@@ -236,14 +145,13 @@ def save_model(
         catalog_name=catalog_name,
         features=features,
         n_components=n_components,
-        n_trial_number=n_trial_number,
     )
 
     # set model name (for any case)
     model.set_name(model_name)
 
     # get model path
-    path = get_model_path(catalog_name, features, n_components, n_trial_number)
+    path = get_model_path(catalog_name, features, n_components)
 
     # before saving, check if the directory exists
     utils.create_directory(os.path.dirname(path))
@@ -256,7 +164,6 @@ def load_model(
     catalog_name: str,
     features: List[str],
     n_components: int,
-    n_trial_number: Optional[int] = None,
 ) -> GaussianMixtureModel:
     """
     Load a specific model from disk.
@@ -265,27 +172,13 @@ def load_model(
     - catalog_name (str): Name of the catalog.
     - features (List[str]): List of features.
     - n_components (int): Number of components.
-    - n_trial_number (int, optional): Trial number of the model. If not provided, the 'selected' model will be loaded.
-        If 'selected' model does not exist, the first model will be loaded.
 
     Returns:
     - GaussianMixtureModel: Loaded model.
     """
-    # check if n_trial_number is provided
-    if n_trial_number is None:
-        # in this case, load the selected model
-        df_selected_models = get_selected_models(
-            catalog_name=catalog_name, features=features, n_components=n_components
-        )
-        # if dataframe is empty, load the first model
-        if df_selected_models is None or df_selected_models.empty:
-            n_trial_number = 1
-        else:
-            # get the trial number of the selected model
-            n_trial_number = df_selected_models["n_trial_number"].iloc[0]
 
     # get model path
-    path = get_model_path(catalog_name, features, n_components, n_trial_number)
+    path = get_model_path(catalog_name, features, n_components)
 
     return GaussianMixtureModel.load(path)
 
@@ -294,8 +187,6 @@ def load_all_models(
     catalog_name: Optional[str] = None,
     features: Optional[List[str]] = None,
     n_components: Optional[int] = None,
-    n_trial_number: Optional[int] = None,
-    only_selected_models: bool = False,
 ) -> List[GaussianMixtureModel]:
     """
     Load all Gaussian Mixture Models (GMMs) based on filter criteria from a specified directory.
@@ -304,8 +195,6 @@ def load_all_models(
     - catalog_name (str, optional): Filter models based on the catalog name.
     - features (list[str], optional): Filter models that were trained using the given features.
     - n_components (int, optional): Filter models based on the number of components used in the GMM.
-    - n_trial_number (int, optional): Filter models based on the trial number.
-    - only_selected_models (bool): If True, only load models that are selected for the analysis.
 
     Returns:
     - list[GaussianMixtureModel]: A list of loaded GMMs.
@@ -340,32 +229,13 @@ def load_all_models(
             m for m in filtered_model_dicts if m["n_components"] == n_components
         ]
 
-    # filter models by n_trial_number if provided
-    if n_trial_number is not None:
-        filtered_model_dicts = [
-            m for m in filtered_model_dicts if m["n_trial_number"] == n_trial_number
-        ]
-
-    # filter models by selected models if requested
-    if only_selected_models:
-        # get all selected models
-        df_selected_models = get_selected_models()
-        # if dataframe is not None, filter models
-        if df_selected_models is not None:
-            filtered_model_dicts = [
-                m
-                for m in filtered_model_dicts
-                if get_model_name(**m) in df_selected_models.index
-            ]
-
-    # Sort list based on catalog name, features, n_components, and n_trial_number
+    # Sort list based on catalog name, features, n_components
     sorted_model_dicts = sorted(
         filtered_model_dicts,
         key=lambda x: (
             x["catalog_name"],
             x["features"],
             x["n_components"],
-            x["n_trial_number"],
         ),
     )
 
@@ -375,7 +245,6 @@ def load_all_models(
             catalog_name=model_dict["catalog_name"],
             features=model_dict["features"],
             n_components=model_dict["n_components"],
-            n_trial_number=model_dict["n_trial_number"],
         )
         for model_dict in sorted_model_dicts
     ]
@@ -391,8 +260,6 @@ def create_models(
     n_init: int = 100,
     n_trials: int = 1,
     sort_clusters: bool = True,
-    save_models: bool = True,
-    force: bool = False,
 ) -> List[GaussianMixtureModel]:
     """
     Create Gaussian Mixture Models based on the provided dataset and parameters.
@@ -405,8 +272,6 @@ def create_models(
     - n_init (int): Number of times the algorithm will be run with different centroid seeds.
     - n_trials (int): Number of trials for creating the model.
     - sort_clusters (bool): Whether to sort the clusters.
-    - save_models (bool): Flag to determine if the models should be saved.
-    - force (bool): Flag to determine if a pre-saved model should be re-created. If False, model creation will be skipped. Otherwise, model will be overwritten.
 
     Returns:
     - List[GaussianMixtureModel]: List of created models.
@@ -454,15 +319,6 @@ def create_models(
     models = []
     for n_component in n_components:
         for n_trial in range(1, n_trials + 1):
-            # first, check if model is already created
-            if save_models and not force:
-                # get model path
-                path = get_model_path(catalog_name, features, n_component, n_trial)
-                # if model is already exists, skip
-                if os.path.exists(path):
-                    logger.warning(f"Model already exists '{path}'. Skipping...")
-                    continue
-
             # create custom name for GMM
             custom_name = f"[GMM {catalog_name} ({', '.join(features)}) (C={n_component}) (N={n_trial}))]"
 
@@ -477,15 +333,6 @@ def create_models(
 
             models.append(model)
 
-            # save model if requested
-            if save_models:
-                save_model(
-                    model=model,
-                    catalog_name=catalog_name,
-                    features=features,
-                    n_components=n_component,
-                    n_trial_number=n_trial,
-                )
     # return created models
     return models
 
@@ -494,8 +341,6 @@ def get_model_scores(
     catalog_name: Optional[str] = None,
     features: Optional[List[str]] = None,
     n_components: Optional[int] = None,
-    n_trial: Optional[int] = None,
-    only_selected_models: bool = True,
     metrics: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
@@ -505,8 +350,6 @@ def get_model_scores(
     - catalog_name (Optional[str]): Filter the scores based on the catalog name.
     - features (Optional[List[str]]): Filter the scores based on a list of features.
     - n_components (Optional[int]): Filter the scores based on the number of components.
-    - n_trial (Optional[int]): Filter the scores based on the number of trials.
-    - only_selected_models (bool): If True, fetch scores only for selected models. Default is True.
     - metrics (Optional[List[str]]): If provided, filter columns to show only these metrics.
 
     Returns:
@@ -514,7 +357,7 @@ def get_model_scores(
     """
 
     # default columns in the dataframe
-    meta_cols = ["catalog", "features", "n_components", "n_trial"]
+    meta_cols = ["catalog", "features", "n_components"]
     # get all available metric names
     metric_cols = list(mets.get_clustering_metrics().keys())
     # insert 'gap_err' right after 'gap'
@@ -544,12 +387,6 @@ def get_model_scores(
         df = df[df["features"] == "-".join(features)]
     if n_components:
         df = df[df["n_components"] == n_components]
-    if n_trial:
-        df = df[df["n_trial"] == n_trial]
-    if only_selected_models:
-        df_selected_models = get_selected_models()
-        if df_selected_models is not None:
-            df = df[df.index.isin(df_selected_models.index)]
 
     return df[meta_cols + metrics]
 
@@ -576,8 +413,6 @@ def get_model_scores_by_name(
         catalog_name=model_attrs["catalog_name"],
         features=model_attrs["features"],
         n_components=model_attrs["n_components"],
-        n_trial=model_attrs["n_trial_number"],
-        only_selected_models=False,
         metrics=metrics,
     )
 
@@ -587,7 +422,7 @@ def save_model_scores(model_name: str, scores: Dict[str, float]) -> None:
     Save the evaluation scores of a given model to an excel file.
 
     This function saves the scores of a model in an existing excel file, updating or appending rows as necessary.
-    It also includes metadata parsed from the model name, like catalog, features, number of components, and trial number.
+    It also includes metadata parsed from the model name, like catalog, features and number of components.
 
     Parameters:
     -----------
@@ -607,13 +442,12 @@ def save_model_scores(model_name: str, scores: Dict[str, float]) -> None:
         raise ValueError("Model name is not provided.")
 
     # Fetch existing scores.
-    df = get_model_scores(only_selected_models=False)
+    df = get_model_scores()
     # parse model name
     model_attrs = parse_model_name(model_name)
     df.loc[model_name, "catalog"] = model_attrs["catalog_name"]
     df.loc[model_name, "features"] = "-".join(model_attrs["features"])
     df.loc[model_name, "n_components"] = model_attrs["n_components"]
-    df.loc[model_name, "n_trial"] = model_attrs["n_trial_number"]
 
     # If a new metric (column) is being introduced, add it to the DataFrame.
     for key in scores.keys():
@@ -630,8 +464,8 @@ def save_model_scores(model_name: str, scores: Dict[str, float]) -> None:
     # Ensure the directory structure exists.
     utils.create_directory(os.path.dirname(path))
 
-    # Sort rows based on catalog name, features, n_components, and n_trial.
-    df.sort_values(by=["catalog", "features", "n_components", "n_trial"], inplace=True)
+    # Sort rows based on catalog name, features, n_components.
+    df.sort_values(by=["catalog", "features", "n_components"], inplace=True)
 
     # Save the dataframe as an excel file.
     df.round(4).to_excel(
@@ -649,7 +483,7 @@ def evaluate_model(
     df: pd.DataFrame,
     features: Optional[List[str]] = None,
     metrics: Optional[List[str]] = None,
-    save_scores: bool = True,
+    save_scores: bool = False,
 ) -> Dict[str, float]:
     """
     Evaluates a Gaussian Mixture Model using specified metrics and dataset.
