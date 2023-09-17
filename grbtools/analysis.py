@@ -1,12 +1,17 @@
 import os
+from copy import deepcopy
 from typing import Dict, List, Optional
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
 
 from . import data as dt
-from . import disp, env, stats, utils
-from .gmm import GaussianMixtureModel
+from . import disp, env
+from . import models as md
+from . import stats, utils
+
 
 # get logger
 logger = env.get_logger()
@@ -81,6 +86,203 @@ def detect_outliers(
             fmt="pdf",
         ),
     )
+
+
+def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) -> None:
+    """
+    Creates 'n_trials' number of GMM models and averages their parameters to
+    obtain a single robust model.
+
+    Parameters:
+    - df (pd.DataFrame): Input dataset.
+    - n_components (int): Number of Gaussian components for the model.
+    - n_trials (int): Number of trials for GMM fitting. Default is 100.
+
+    Returns:
+    None. The function saves the plots and analysis results to disk.
+    """
+
+    # extract catalog name, features, and number of features
+    catalog_name = df.index.name
+    features = df.columns.tolist()
+    n_features = len(features)
+
+    # get model name
+    model_name = md.get_model_name(catalog_name, features, n_components)
+
+    # return if the model already exists
+    if md.is_model_exists(model_name):
+        logger.warning(f"Model '{model_name}' already created! Skipping...")
+        return
+
+    # Define base path for saving figures
+    subdir = os.path.join(
+        "models", catalog_name, "-".join(features), f"{n_components}G"
+    )
+
+    # Create models
+    model_list = md.create_models(
+        df=df,
+        features=features,
+        n_components=n_components,
+        n_trials=n_trials,
+        max_iter=10000,
+        n_init=10,
+        sort_clusters=True,
+    )
+
+    # Extract parameters of each model
+    model_list_params = {
+        model.model_name: model.get_component_params() for model in model_list
+    }
+
+    # Aggregate means of all Gaussian components from all models
+    means_of_all_components = np.array(
+        [
+            model_list_params[mm][cid]["mean"]
+            for mm in model_list_params
+            for cid in model_list_params[mm].keys()
+        ]
+    ).reshape(-1, n_features)
+
+    # Convert to DataFrame for easier manipulation and visualization
+    df_means_of_all_components = pd.DataFrame(
+        means_of_all_components, columns=[f"m{fid}" for fid in range(n_features)]
+    )
+
+    # Create subplots
+    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    plt.subplots_adjust(hspace=0.1, wspace=0.1)
+
+    # Display histogram of means based on feature count
+    if n_features == 1:
+        disp.histogram_1d(
+            df=df_means_of_all_components,
+            show_density_curve=False,
+            n_bins=50,
+            xlabel="Mean",
+            title="Distribution of Component Masses",
+            ax=ax0,
+        )
+    elif n_features == 2:
+        disp.histogram_2d(
+            df=df_means_of_all_components,
+            n_bins=50,
+            title="Distribution of Component Masses",
+            xlabel="Mean-1",
+            ylabel="Mean-2",
+            ax=ax0,
+        )
+
+    # Apply k-means clustering to means of all components
+    kmeans = KMeans(
+        n_clusters=n_components, init="k-means++", n_init=10, max_iter=10000
+    ).fit(means_of_all_components)
+
+    # Assign cluster labels to each mean
+    df_means_of_all_components["cluster"] = kmeans.predict(means_of_all_components)
+
+    # Plot each cluster on the second subplot
+    for cid in range(n_components):
+        df_cluster = df_means_of_all_components[
+            df_means_of_all_components["cluster"] == cid
+        ]
+        disp.plot_data(
+            df=df_cluster,
+            cols=df_cluster.columns[:-1],
+            ax=ax1,
+            return_ax=True,
+            color=disp.get_color(cid),
+            n_bins="auto",
+            title="Distribution of Component Masses (Clustered)",
+        )
+
+    # Save figure
+    disp.save_figure(
+        filename="mass_distribution",
+        subdir=subdir,
+    )
+
+    # Compute the average parameters for each component
+    new_component_params = {
+        cid: {
+            "mean": [],
+            "covariance": [],
+            "weight": [],
+        }
+        for cid in range(n_components)
+    }
+
+    # Use the means of each k-means cluster as reference means for GMM components
+    ref_means = np.array(
+        [
+            df_means_of_all_components.groupby("cluster").mean().loc[cid].values
+            for cid in range(n_components)
+        ]
+    ).reshape(n_components, n_features)
+
+    # Average cluster parameters across models
+    for model in model_list:
+        component_params = model.get_component_params()
+        component_means = np.array(
+            [component_params[cid]["mean"] for cid in range(n_components)]
+        ).reshape(n_components, n_features)
+        mapping = utils.match_gaussian_components(component_means, ref_means)
+        for orig_cid, matched_cid in mapping.items():
+            new_component_params[orig_cid]["mean"].append(
+                component_params[matched_cid]["mean"]
+            )
+            new_component_params[orig_cid]["covariance"].append(
+                component_params[matched_cid]["covariance"]
+            )
+            new_component_params[orig_cid]["weight"].append(
+                component_params[matched_cid]["weight"]
+            )
+
+    # Create a new averaged GMM model using the average parameters
+    gmm_avg = deepcopy(model_list[0])
+    for fid in range(n_components):
+        gmm_avg.weights_[fid] = np.mean(new_component_params[fid]["weight"])
+        gmm_avg.means_[fid] = np.mean(new_component_params[fid]["mean"], axis=0)
+        covs = np.array(new_component_params[fid]["covariance"]).reshape(
+            n_trials, n_features, n_features
+        )
+        gmm_avg.covariances_[fid] = utils.compute_avg_covariance(covs)
+        gmm_avg.precisions_[fid] = np.linalg.inv(gmm_avg.covariances_[fid])
+        gmm_avg.precisions_cholesky_[fid] = np.linalg.cholesky(gmm_avg.precisions_[fid])
+
+    # Save and plot the new model
+    gmm_avg.model_name = model_name
+    gmm_avg.sort_clusters_by_means()
+    md.save_model(gmm_avg, catalog_name, features, n_components)
+    disp.plot_model(
+        model=gmm_avg,
+        df=df,
+        cols=features,
+        show_decision_boundary=True,
+        show_cluster_centers=True,
+        show_confidence_ellipses=True,
+        show_confidence_ellipsoids=True,
+        n_bins="auto",
+        title=f"GMM (AVG) | {n_components}G ",
+        save_kwargs=dict(filename=gmm_avg.model_name, subdir=subdir),
+    )
+
+    axes = disp.plot_models_as_grid(
+        models=[gmm_avg] + np.random.choice(model_list, 8).tolist(),
+        df=df,
+        cols=features,
+        show_decision_boundary=True,
+        show_cluster_centers=True,
+        show_confidence_ellipses=True,
+        show_confidence_ellipsoids=True,
+        return_axes=True,
+    )
+    axes[0].set_title(f"GMM (AVG) | {n_components}G ")
+    disp.save_figure(filename="models", subdir=subdir)
+
+    # clear all figures
+    plt.close("all")
 
 
 def check_for_normality(data, with_outliers=True, feat_space=[]):
