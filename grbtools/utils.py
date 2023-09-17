@@ -4,6 +4,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
+from pyriemann.utils.mean import mean_riemann
 
 
 def create_directory(path: str) -> None:
@@ -43,14 +44,29 @@ def match_gaussian_components(
 
     # Calculate the distance matrix between the two sets of components
     distance_matrix = np.array(
-        [[np.abs(s - f) for f in mean_list_1st] for s in mean_list_2nd]
+        [[np.linalg.norm(s - f) for f in mean_list_1st] for s in mean_list_2nd]
     )
+    distance_matrix = distance_matrix.reshape(len(mean_list_1st), len(mean_list_2nd))
 
     # Use the Hungarian algorithm to find the optimal assignment between components
     row_indices, col_indices = linear_sum_assignment(distance_matrix)
 
     # Return the matched component pairs as a dictionary
     return dict(zip(row_indices, col_indices))
+
+
+def compute_avg_covariance(cov_matrix_list: np.ndarray) -> np.ndarray:
+    """
+    Compute the Riemannian mean of a list of covariance matrices using the pyriemann module.
+
+    Parameters:
+    - cov_matrix_list (np.ndarray): A list or array of covariance matrices.
+                                   Expected shape is (n_matrices, n_channels, n_channels).
+
+    Returns:
+    - np.ndarray: The Riemannian mean of the provided covariance matrices.
+    """
+    return mean_riemann(cov_matrix_list)
 
 
 def merge_scores(scores={}):
