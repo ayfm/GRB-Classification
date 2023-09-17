@@ -66,7 +66,7 @@ def _check_model_convergence(model: GaussianMixtureModel) -> None:
     - ValueError: If the model is not fitted.
     """
 
-    if not model.converged_:
+    if hasattr(model, "converged_") and not model.converged_:
         raise ValueError("Model is not fitted yet.")
 
 
@@ -193,7 +193,7 @@ def save_figure(
         plt.savefig(full_path, format=format_, bbox_inches="tight", dpi=300)
 
 
-def histogram(
+def histogram_1d(
     df: pd.DataFrame,
     column: str = None,
     n_bins: int = None,
@@ -203,6 +203,8 @@ def histogram(
     vertical_lines: list = [],
     title: str = "",
     xlabel: str = None,
+    legend_label: str = None,
+    color: str = None,
     figsize: Tuple[int, int] = _FIGSIZE_HIST,
     ax: plt.Axes = None,
     return_ax: bool = False,
@@ -223,6 +225,7 @@ def histogram(
     - vertical_lines (list, optional): List of x-values where vertical lines should be displayed.
     - title (str, optional): Title of the plot.
     - xlabel (str, optional): Label for the x-axis.
+    - legend_label (str): Label for the data in the legend.
     - figsize (Tuple[int, int]): Size of the plot.
     - ax (matplotlib.Axes, optional): Axes object to plot on. If not specified, a new figure object is created.
     - return_ax (bool, optional): If True, returns the Axes object. Default is False.
@@ -237,7 +240,9 @@ def histogram(
     """
 
     # check if column is provided
-    column = _check_dataframe_columns(df, columns=[column], n_cols=1)[0]
+    column = _check_dataframe_columns(
+        df, columns=[column] if column else None, n_cols=1
+    )[0]
 
     # get X values
     X = df[column].values.flatten()
@@ -289,8 +294,8 @@ def histogram(
             X[~is_outlier],
             -0.005 - 0.01 * np.random.random(n_inliers),
             marker=".",
-            color="black",
-            label="Inlier",
+            color=color or "black",
+            label=legend_label or "Inlier",
         )
 
         if show_outliers:
@@ -324,7 +329,7 @@ def histogram(
         return ax
 
 
-def histogram_with_clusters(
+def histogram_1d_with_clusters(
     model: GaussianMixtureModel,
     df: pd.DataFrame,
     column: str = None,
@@ -376,7 +381,7 @@ def histogram_with_clusters(
     ax = _check_ax(ax, figsize)
 
     # plot the histogram
-    ax = histogram(
+    ax = histogram_1d(
         df=df,
         column=column,
         n_bins=n_bins,
@@ -396,7 +401,7 @@ def histogram_with_clusters(
     )
 
     # Plot clusters
-    cluster_params = model.get_cluster_params()
+    cluster_params = model.get_component_params()
     xmin, xmax = ax.get_xlim()
     xspace = np.linspace(xmin, xmax, num=1000).reshape(-1, 1)
 
@@ -448,6 +453,84 @@ def histogram_with_clusters(
     if save_kwargs:
         save_figure(**save_kwargs)
 
+    if return_ax:
+        return ax
+
+
+def histogram_2d(
+    df: pd.DataFrame,
+    columns: Tuple[str, str] = None,
+    n_bins: Tuple[int, int] = 10,
+    cbar_label: str = "Count",
+    title: str = "",
+    xlabel: str = None,
+    ylabel: str = None,
+    color_map: str = "viridis",
+    figsize: Tuple[int, int] = (10, 7),
+    ax: plt.Axes = None,
+    return_ax: bool = False,
+    hist2d_kwargs: dict = dict(),
+    save_kwargs: dict = None,
+    **kwargs,
+) -> Optional[plt.Axes]:
+    """
+    Display a 2D histogram of two specified columns in a dataframe.
+
+    Parameters:
+    - df (pd.DataFrame): Input dataframe.
+    - columns (Tuple[str, str]): The column names to plot.
+    - n_bins (Tuple[int, int], optional): Number of bins for the histograms. Defaults are None.
+    - cbar_label (str): Label for the colorbar.
+    - title (str, optional): Title of the plot.
+    - xlabel (str): Label for the x-axis.
+    - ylabel (str): Label for the y-axis.
+    - color_map (str): Colormap to be used.
+    - figsize (Tuple[int, int]): Size of the plot.
+    - ax (matplotlib.Axes, optional): Axes object to plot on. If not specified, a new figure object is created.
+    - return_ax (bool, optional): If True, returns the Axes object. Default is False.
+    - hist2d_kwargs (dict, optional): Arbitrary keyword arguments to be passed to ax.hist2d function. Default is None.
+    - save_kwargs (dict, optional): Arbitrary keyword arguments to be passed to save_figure function. Default is None.
+
+    Returns:
+    - plt.Axes: Matplotlib Axes object with the plot.
+
+    Raises:
+    - ValueError: If any of the specified columns don't exist in the dataframe.
+    """
+
+    # check if columns are provided
+    columns = _check_dataframe_columns(df, columns, n_cols=2)
+
+    # check if outliers are present
+    _check_outlier_column(df)
+
+    # Extract column names
+    xcol, ycol = columns
+
+    # Extract data
+    X = df[xcol].values
+    Y = df[ycol].values
+
+    # Create a new figure if ax is not provided
+    ax = _check_ax(ax, figsize)
+
+    # Plot the 2D histogram
+    cax = ax.hist2d(X, Y, bins=n_bins, cmap=color_map, **hist2d_kwargs)
+
+    # Set title and labels
+    ax.set_title(title)
+    ax.set_xlabel(xlabel or columns[0])
+    ax.set_ylabel(ylabel or columns[1])
+
+    # Adding a colorbar
+    cbar = plt.colorbar(cax[3], ax=ax)
+    cbar.set_label(cbar_label)
+
+    # Save the plot if save_kwargs is provided
+    if save_kwargs:
+        save_figure(**save_kwargs)
+
+    # Return the axis if specified
     if return_ax:
         return ax
 
@@ -653,7 +736,7 @@ def scatter_2d_with_clusters(
         draw_cluster_boundary(model=model, ax=ax)
 
     # get cluster params
-    cluster_params = model.get_cluster_params()
+    cluster_params = model.get_component_params()
 
     # if specified, display gaussians
     if show_confidence_ellipses:
@@ -894,7 +977,7 @@ def scatter_3d_with_clusters(
         )
 
     # get cluster params
-    cluster_params = model.get_cluster_params()
+    cluster_params = model.get_component_params()
 
     # if specified, display gaussians
     if show_confidence_ellipsoids:
@@ -963,7 +1046,7 @@ def plot_data(
 
     # Plot based on the number of columns provided
     if num_cols == 1:
-        return histogram(df, cols[0], ax=ax, return_ax=return_ax, **kwargs)
+        return histogram_1d(df, cols[0], ax=ax, return_ax=return_ax, **kwargs)
     elif num_cols == 2:
         return scatter_2d(df, cols, ax=ax, return_ax=return_ax, **kwargs)
     elif num_cols == 3:
@@ -1005,7 +1088,7 @@ def plot_model(
 
     # Plot based on the number of columns provided
     if num_cols == 1:
-        return histogram_with_clusters(
+        return histogram_1d_with_clusters(
             model, df, cols[0], ax=ax, return_ax=return_ax, **kwargs
         )
     elif num_cols == 2:
