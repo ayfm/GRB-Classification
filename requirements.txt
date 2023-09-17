@@ -8,6 +8,7 @@ conda install -c conda-forge xlsxwriter
 conda install seaborn
 conda install -c conda-forge pot
 conda install -c conda-forge coloredlogs
+pip install pyriemann
  
 ---------
 ENV: grb-ivat
