@@ -44,7 +44,7 @@ def get_model_path(
         env.DIR_MODELS,
         catalog_name,
         features_txt,
-        f"{n_components}G",
+        # f"{n_components}G",
         subdir or "",
         model_name,
     )
@@ -90,6 +90,22 @@ def parse_model_name(model_name: str) -> dict:
         "features": tokens[1].split("-"),
         "n_components": int(tokens[2][:-1]),
     }
+
+
+def is_model_exists(model_name: str) -> bool:
+    """
+    Check if a model exists on disk.
+
+    Parameters:
+    - model_name (str): Name of the model.
+
+    Returns:
+    - bool: True if the model exists, False otherwise.
+    """
+    # get model path
+    path = get_model_path(**parse_model_name(model_name))
+
+    return os.path.exists(path)
 
 
 def get_model_params(model: GaussianMixtureModel) -> dict:
