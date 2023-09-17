@@ -7,19 +7,19 @@ import logging
 DIR_PACKAGE = os.path.dirname(os.path.realpath(__file__))
 
 # path of the catalogs
-DIR_CATALOGS = os.path.join("..", "catalogs")
+DIR_CATALOGS = os.path.join(DIR_PACKAGE, "..", "catalogs")
 
 # path of the datasets
-DIR_DATASETS = os.path.join("..", "datasets")
+DIR_DATASETS = os.path.join(DIR_PACKAGE, "..", "datasets")
 
 # path of the reports
-DIR_REPORTS = os.path.join("..", "reports")
+DIR_REPORTS = os.path.join(DIR_PACKAGE, "..", "reports")
 
 # path of the figures
-DIR_FIGURES = os.path.join("..", "figures")
+DIR_FIGURES = os.path.join(DIR_PACKAGE, "..", "figures")
 
 # path of the models
-DIR_MODELS = os.path.join("..", "models")
+DIR_MODELS = os.path.join(DIR_PACKAGE, "..", "models")
 
 
 # default log level
