@@ -127,7 +127,7 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
         n_components=n_components,
         n_trials=n_trials,
         max_iter=10000,
-        n_init=10,
+        n_init=1,
         sort_clusters=True,
     )
 
@@ -151,8 +151,12 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
     )
 
     # Create subplots
-    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
-    plt.subplots_adjust(hspace=0.1, wspace=0.1)
+    if n_features <= 2:
+        fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        plt.subplots_adjust(hspace=0.1, wspace=0.1)
+    else:
+        fig = plt.figure(figsize=(8, 4))
+        ax1 = fig.add_subplot(111, projection="3d")
 
     # Display histogram of means based on feature count
     if n_features == 1:
@@ -192,6 +196,8 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
             cols=df_cluster.columns[:-1],
             ax=ax1,
             return_ax=True,
+            scatter=False,
+            show_density_curve=False,
             color=disp.get_color(cid),
             n_bins="auto",
             title="Distribution of Component Masses (Clustered)",
