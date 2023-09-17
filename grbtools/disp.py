@@ -260,11 +260,15 @@ def histogram_1d(
     # Create a new figure if ax is not provided
     ax = _check_ax(ax, figsize)
 
+    # set n_bins if not provided
+    if n_bins is None:
+        n_bins = "auto"
+
     # Plot the histogram
     if show_outliers:
-        # determine the number of bins
-        if n_bins is None:
-            n_bins = stats.compute_bin_size(X)
+        # # determine the number of bins
+        # if n_bins is None:
+        #     n_bins = stats.compute_bin_size(X)
         sns.histplot(
             X,
             bins=n_bins,
@@ -274,8 +278,8 @@ def histogram_1d(
         )
     else:
         # determine the number of bins
-        if n_bins is None:
-            n_bins = stats.compute_bin_size(X[~is_outlier])
+        # if n_bins is None:
+        #     n_bins = stats.compute_bin_size(X[~is_outlier])
         sns.histplot(
             X[~is_outlier],
             bins=n_bins,
@@ -859,16 +863,17 @@ def scatter_3d(
         )
 
     # Plot main data
-    ax.scatter(
-        X[~outlier_mask],
-        Y[~outlier_mask],
-        Z[~outlier_mask],
-        color=color,
-        alpha=alpha,
-        marker=marker,
-        s=marker_size,
-        label=legend_label or "Inlier",
-    )
+    if len(X[~outlier_mask]) > 0:
+        ax.scatter(
+            X[~outlier_mask],
+            Y[~outlier_mask],
+            Z[~outlier_mask],
+            color=color,
+            alpha=alpha,
+            marker=marker,
+            s=marker_size,
+            label=legend_label or "Inlier",
+        )
 
     # Set labels and title
     ax.set_xlabel(xlabel or xcol)
