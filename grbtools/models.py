@@ -17,7 +17,6 @@ def get_model_path(
     catalog_name: str,
     features: List[str],
     n_components: int,
-    model_id: int,
     subdir: Optional[str] = None,
 ) -> str:
     """
@@ -28,7 +27,6 @@ def get_model_path(
     - catalog_name (str): Catalog name
     - features (List of string): List of features
     - n_components (int): Number of clusters in the model.
-    - model_id (int): ID of the model.
     - subdir (str, optional): A subdirectory under the main models directory.
 
     Returns:
@@ -39,7 +37,7 @@ def get_model_path(
     features_txt = "-".join(features)
 
     # get model name
-    model_name = get_model_name(catalog_name, features, n_components, model_id)
+    model_name = get_model_name(catalog_name, features, n_components)
 
     # create path
     model_path = os.path.join(
