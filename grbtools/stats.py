@@ -683,6 +683,99 @@ def calinski_harabasz_score(
     return score
 
 
+def density_distance_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "euclidean"
+) -> float:
+    """
+    Calculate the Density Distance Score (DeD score) for clustering.
+
+    The DeD score balances the intra-cluster densities against the inter-cluster
+    distances to evaluate the quality of clustering.
+
+    Parameters:
+    - X (np.ndarray): The input data array where each row is a data point.
+    - labels (np.ndarray): The labels or clusters assigned for each data point.
+    - metric (str, optional): The metric used for distance calculation. Choices are 'euclidean' or 'mahalanobis'.
+                              Default is 'euclidean'.
+
+    Returns:
+    - float: The DeD score. A higher value suggests better clustering.
+
+    Raises:
+    - ValueError: If the metric choice is neither 'euclidean' nor 'mahalanobis'.
+    """
+
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Reshape the data if it's 1-dimensional
+    if len(X.shape) == 1:
+        X = X.reshape(-1, 1)
+
+    # Extract shape details
+    N, dim = X.shape
+
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+
+    # Handle the case with only one cluster
+    if n_clusters == 1:
+        return np.nan
+
+    # Compute average intra-cluster density
+    total_density = sum(
+        np.linalg.det(np.cov(X[labels == label], rowvar=False))
+        if dim > 1
+        else np.var(X[labels == label])
+        for label in unique_labels
+    )
+    avg_density = total_density / n_clusters
+
+    # Compute average inter-cluster distances between centroids
+    distances = []
+    for i, label_i in enumerate(unique_labels[:-1]):
+        for label_j in unique_labels[i + 1 :]:
+            mean_i, mean_j = np.mean(X[labels == label_i], axis=0), np.mean(
+                X[labels == label_j], axis=0
+            )
+
+            if metric == "euclidean":
+                distances.append(np.linalg.norm(mean_i - mean_j))
+            else:
+                cluster_i_data, cluster_j_data = (
+                    X[labels == label_i],
+                    X[labels == label_j],
+                )
+                if dim == 1:
+                    pooled_std = pooled_covariance(
+                        np.var(cluster_i_data),
+                        np.var(cluster_j_data),
+                        len(cluster_i_data),
+                        len(cluster_j_data),
+                    )
+                    distances.append(np.abs(mean_i - mean_j) / pooled_std)
+                else:
+                    pooled_cov = pooled_covariance(
+                        np.cov(cluster_i_data, rowvar=False),
+                        np.cov(cluster_j_data, rowvar=False),
+                        len(cluster_i_data),
+                        len(cluster_j_data),
+                    )
+                    inv_cov_matrix = np.linalg.inv(pooled_cov)
+                    distances.append(
+                        cdist(
+                            mean_i[np.newaxis],
+                            mean_j[np.newaxis],
+                            VI=inv_cov_matrix,
+                            metric="mahalanobis",
+                        )[0, 0]
+                    )
+
+    avg_dispersion = np.mean(distances)
+
+    return avg_density / avg_dispersion
+
+
 def hopkins_statistic(
     X: np.ndarray, sample_ratio: float = 0.05, random_state=None
 ) -> float:
