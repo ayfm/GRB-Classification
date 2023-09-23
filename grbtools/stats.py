@@ -3,7 +3,7 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 
 import numpy as np
 import ot
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist, mahalanobis
 from scipy.stats import (
     anderson,
     entropy,
@@ -418,13 +418,7 @@ def inter_cluster_dispersion(
             squared_distance = np.sum((cluster_mean - overall_mean) ** 2)
         else:  # metric == "Mahalanobis"
             squared_distance = (
-                cdist(
-                    cluster_mean.reshape(1, -1),
-                    overall_mean.reshape(1, -1),
-                    VI=inv_cov_matrix,
-                    metric="mahalanobis",
-                )[0][0]
-                ** 2
+                mahalanobis(cluster_mean, overall_mean, VI=inv_cov_matrix) ** 2
             )
 
         inter_disp += num_points_in_cluster * squared_distance
@@ -763,17 +757,120 @@ def density_distance_score(
                     )
                     inv_cov_matrix = np.linalg.inv(pooled_cov)
                     distances.append(
-                        cdist(
-                            mean_i[np.newaxis],
-                            mean_j[np.newaxis],
-                            VI=inv_cov_matrix,
-                            metric="mahalanobis",
-                        )[0, 0]
+                        mahalanobis(
+                            mean_i[np.newaxis], mean_j[np.newaxis], VI=inv_cov_matrix
+                        )
                     )
 
     avg_dispersion = np.mean(distances)
 
     return avg_density / avg_dispersion
+
+
+def dunn_index(X, labels, metric="euclidean"):
+    """
+    Compute the Dunn Index for the given data and labels.
+
+    The Dunn Index is a metric for evaluating clustering quality. It is the ratio between the smallest distance between
+    observations not in the same cluster to the largest intra-cluster distance. A larger Dunn Index indicates better
+    clustering quality.
+
+    Mathematically, for K clusters, it is defined as:
+    Dunn Index = min_{i, j} (dist(C_i, C_j)) / max_k (diam(C_k))
+    where dist() is the distance between clusters and diam() is the diameter of cluster (i.e., the largest distance between
+    two samples in the cluster).
+
+    The value of the Dunn Index ranges from 0 to infinity. A value close to 0 indicates that clusters are overlapping, while
+    a larger value indicates that clusters are more distinct.
+
+    Parameters:
+    ----------
+    X : array-like of shape (n_samples, n_features)
+        Data matrix.
+    labels : array-like of shape (n_samples,)
+        Cluster assignments for each data point.
+    metric : str, optional (default="euclidean")
+        Distance metric to use. Options are "euclidean" or "mahalanobis".
+
+    Returns:
+    -------
+    float
+        Dunn Index for the given clustering.
+
+    """
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Reshape the data if it's 1-dimensional
+    if len(X.shape) == 1:
+        X = X.reshape(-1, 1)
+
+    # Extract shape details
+    N, dim = X.shape
+
+    # get unique labels
+    unique_labels = np.unique(labels)
+
+    # compute inverse covariance matrix for each cluster
+    VI_cluster = dict()
+    if metric == "mahalanobis":
+        for label in unique_labels:
+            members = X[labels == label]
+
+            if members.shape[0] > 1:  # More than one member in the cluster
+                if dim > 1:
+                    VI_cluster[label] = np.linalg.inv(np.cov(members, rowvar=False))
+                else:
+                    VI_cluster[label] = 1 / np.var(members)
+            else:
+                VI_cluster[label] = np.nan
+
+    # Compute intra-cluster distances (maximal distance within each cluster)
+    intra_cluster_dists = []
+    for label in unique_labels:
+        members = X[labels == label]
+
+        # Cluster with one point has intra-cluster distance of 0
+        if members.shape[0] <= 1:
+            intra_cluster_dists.append(0)
+            continue
+
+        if metric == "euclidean":
+            intra_cluster_distance = np.max(pdist(members))
+        else:
+            VI = VI_cluster[label]
+            intra_cluster_distance = np.max(pdist(members, VI=VI, metric="mahalanobis"))
+
+        intra_cluster_dists.append(intra_cluster_distance)
+
+    # Compute the maximum intra-cluster distance
+    max_intra_cluster_dist = np.max(intra_cluster_dists)
+
+    # Compute inter-cluster distances (minimal distance between clusters)
+    inter_cluster_dists = []
+    for i, label_i in enumerate(unique_labels):
+        for j, label_j in enumerate(unique_labels):
+            if i < j:  # Avoid duplicate comparisons and self-comparisons
+                members_i = X[labels == label_i]
+                members_j = X[labels == label_j]
+
+                if metric == "euclidean":
+                    # cross_dists = np.min(pdist(np.vstack([members_i, members_j])))
+                    cross_dists = np.min(cdist(members_i, members_j))
+                    inter_cluster_dists.append(cross_dists)
+
+                elif metric == "mahalanobis":
+                    VI = VI_cluster[label_i]
+                    cross_dists = np.min(
+                        cdist(members_i, members_j, VI=VI, metric="mahalanobis")
+                    )
+                    inter_cluster_dists.append(cross_dists)
+
+    # find the minimum inter-cluster distance
+    min_inter_cluster_dist = np.min(inter_cluster_dists)
+
+    # Compute the Dunn Index
+    return min_inter_cluster_dist / max_intra_cluster_dist
 
 
 def hopkins_statistic(
