@@ -133,5 +133,11 @@ dmypy.json
 # test folder
 tests/
 
+# ignore experimantal models
+experiments/
+
+# ignore remote folder
+remote/
+
 # MAC related files
 .DS_Store
