@@ -148,6 +148,9 @@ def align_clustering_scores(
     ValueError
         If the score_orientation is not 'lower' or 'higher'.
     """
+    # create a copy of the scores DataFrame
+    scores = scores.copy(deep=True)
+
     # Check if the orientation is valid
     if score_orientation not in ["lower", "higher"]:
         raise ValueError(
@@ -185,6 +188,9 @@ def normalize_clustering_scores(scores: pd.DataFrame) -> pd.DataFrame:
     pd.DataFrame
         A DataFrame containing normalized clustering scores.
     """
+
+    # create a copy of the scores DataFrame
+    scores = scores.copy(deep=True)
 
     # Identify valid metrics in the scores DataFrame based on clustering_metrics
     valid_metrics = [

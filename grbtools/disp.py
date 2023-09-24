@@ -1691,7 +1691,7 @@ def _check_scores_columns(
         scores = [
             col
             for col in df_scores.columns
-            if col not in ["catalog", "features", "n_components", "n_trial"]
+            if col not in ["catalog", "features", "n_components"]
         ]
         # also, skip columns with 'err' suffix
         scores = [score for score in scores if not score.endswith("_err")]
@@ -1935,6 +1935,9 @@ def plot_scores_as_heatmap(
     - Optional[pd.DataFrame]: If return_scores is True, returns the modified scores dataframe.
     """
 
+    # create a copy of dataframe
+    df_scores = df_scores.copy(deep=True)
+
     # Ensure xvalues are provided or default to the index of df_scores
     xvalues = _check_scores_xvalues(df_scores, xvalues)
 
@@ -1945,9 +1948,7 @@ def plot_scores_as_heatmap(
     df_scores = _modify_scores_dataframe(df_scores, align_scores, normalize_scores=True)
 
     # Remove metadata columns for visualization
-    df_scores = df_scores.drop(
-        columns=["catalog", "features", "n_components", "n_trial"]
-    )
+    df_scores = df_scores.drop(columns=["catalog", "features", "n_components"])
 
     # Extract desired scores for plotting
     df = df_scores[scores]
@@ -1977,6 +1978,9 @@ def plot_scores_as_heatmap(
     # Optional title for the plot
     if title:
         fig.suptitle(title, fontsize=25)
+
+    # disable grid
+    g.grid(False)
 
     # Optional save functionality for the plot
     if save_kwargs:

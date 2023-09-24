@@ -1,3 +1,4 @@
+import glob
 import os
 from copy import deepcopy
 from typing import Dict, List, Optional
@@ -6,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+
+from .gmm import GaussianMixtureModel
 
 from . import data as dt
 from . import disp, env
@@ -82,7 +85,7 @@ def detect_outliers(
         title=f"{catalog.upper()} | {feat_space_txt} | Thr: {density_threshold}",
         save_kwargs=dict(
             filename=f"{catalog}_{feat_space_txt}_{density_threshold}",
-            subdir="outlier_plots",
+            subdir="outliers",
             fmt="pdf",
         ),
     )
@@ -115,21 +118,55 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
         logger.warning(f"Model '{model_name}' already created! Skipping...")
         return
 
-    # Define base path for saving figures
-    subdir = os.path.join(
-        "models", catalog_name, "-".join(features), f"{n_components}G"
+    # get path of the model experiments
+    path_model_trials = os.path.join(
+        os.path.dirname(md.get_model_path(catalog_name, features, n_components)),
+        "experiments",
     )
 
-    # Create models
-    model_list = md.create_models(
-        df=df,
-        features=features,
-        n_components=n_components,
-        n_trials=n_trials,
-        max_iter=10000,
-        n_init=1,
-        sort_clusters=True,
-    )
+    # create the directory if it does not exist
+    if not os.path.exists(path_model_trials):
+        utils.create_directory(path_model_trials)
+
+    # get all model trials created before
+    model_list = []
+    for path_model in glob.glob(os.path.join(path_model_trials, "*.model")):
+        model_list.append(GaussianMixtureModel.load(path_model))
+
+    # how many trials are created before
+    n_model_trials = len(model_list)
+    # if created models are higher than the number of trials, select randomly
+    if n_model_trials > n_trials:
+        model_list = np.random.choice(model_list, n_trials).tolist()
+
+    # otherwise, check how many models should be created
+    else:
+        n_trials_ = n_trials - n_model_trials
+
+        model_list_new = []
+
+        if n_trials_ > 0:
+            # Create models
+            model_list_new = md.create_models(
+                df=df,
+                features=features,
+                n_components=n_components,
+                n_trials=n_trials_,
+                max_iter=10000,
+                n_init=100,
+                sort_clusters=True,
+            )
+
+            # add new models to the list
+            model_list += model_list_new
+
+            # save each model to disk
+            for mid, mm in enumerate(model_list, 1):
+                path_model = os.path.join(path_model_trials, f"{mid}.model")
+                mm.model_name = (
+                    md.get_model_name(catalog_name, features, n_components) + f"_N{mid}"
+                )
+                mm.save(path_model)
 
     # Extract parameters of each model
     model_list_params = {
@@ -180,7 +217,7 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
 
     # Apply k-means clustering to means of all components
     kmeans = KMeans(
-        n_clusters=n_components, init="k-means++", n_init=10, max_iter=10000
+        n_clusters=n_components, init="k-means++", n_init=100, max_iter=10000
     ).fit(means_of_all_components)
 
     # Assign cluster labels to each mean
@@ -196,17 +233,38 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
             cols=df_cluster.columns[:-1],
             ax=ax1,
             return_ax=True,
-            scatter=False,
+            scatter=True,
             show_density_curve=False,
             color=disp.get_color(cid),
-            n_bins="auto",
+            n_bins=2,
+            legend_label=f"Group-{cid}",
+            hist_kwargs={
+                "histtype": "bar",  # "stepfilled",
+                "fill": True,
+                "linewidth": 1.3,
+            },
+            density=True,
             title="Distribution of Component Masses (Clustered)",
         )
+
+    # increase ax limits by 10%
+    ax1.set_xlim(ax1.get_xlim()[0] * 1.1, ax1.get_xlim()[1] * 1.1)
+    ax1.set_ylim(ax1.get_ylim()[0] * 1.1, ax1.get_ylim()[1] * 1.1)
+    # if 3D, increase z-limits by 10%
+    if n_features == 3:
+        ax1.set_zlim(ax1.get_zlim()[0] * 1.1, ax1.get_zlim()[1] * 1.1)
+    # show legends
+    ax1.legend()
+
+    # Define base path for saving figures
+    subdir_figures = os.path.join(
+        "models", catalog_name, "-".join(features), f"{n_components}G"
+    )
 
     # Save figure
     disp.save_figure(
         filename="mass_distribution",
-        subdir=subdir,
+        subdir=subdir_figures,
     )
 
     # Compute the average parameters for each component
@@ -271,7 +329,7 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
         show_confidence_ellipsoids=True,
         n_bins="auto",
         title=f"GMM (AVG) | {n_components}G ",
-        save_kwargs=dict(filename=gmm_avg.model_name, subdir=subdir),
+        save_kwargs=dict(filename=gmm_avg.model_name, subdir=subdir_figures),
     )
 
     axes = disp.plot_models_as_grid(
@@ -285,7 +343,7 @@ def create_robust_gmm(df: pd.DataFrame, n_components: int, n_trials: int = 100) 
         return_axes=True,
     )
     axes[0].set_title(f"GMM (AVG) | {n_components}G ")
-    disp.save_figure(filename="models", subdir=subdir)
+    disp.save_figure(filename="models", subdir=subdir_figures)
 
     # clear all figures
     plt.close("all")
