@@ -62,6 +62,26 @@ clustering_metrics = {
         "is_higher_better": True,
         "func": lambda X, y: stats.calinski_harabasz_score(X, y, metric="mahalanobis"),
     },
+    "ded_euc": {
+        "description": "Density Distance Score (Euclidean)",
+        "is_higher_better": True,
+        "func": lambda X, y: stats.density_distance_score(X, y, metric="euclidean"),
+    },
+    "ded_mah": {
+        "description": "Density Distance Score (Mahalanobis)",
+        "is_higher_better": True,
+        "func": lambda X, y: stats.density_distance_score(X, y, metric="mahalanobis"),
+    },
+    "dunn_euc": {
+        "description": "Dunn Index (Euclidean)",
+        "is_higher_better": True,
+        "func": lambda X, y: stats.dunn_index(X, y, metric="euclidean"),
+    },
+    "dunn_mah": {
+        "description": "Dunn Index (Mahalanobis)",
+        "is_higher_better": True,
+        "func": lambda X, y: stats.dunn_index(X, y, metric="mahalanobis"),
+    },
 }
 
 
