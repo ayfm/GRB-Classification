@@ -205,6 +205,7 @@ def histogram_1d(
     xlabel: str = None,
     legend_label: str = None,
     color: str = None,
+    alpha: float = 0.8,
     figsize: Tuple[int, int] = _FIGSIZE_HIST,
     ax: plt.Axes = None,
     return_ax: bool = False,
@@ -226,10 +227,12 @@ def histogram_1d(
     - title (str, optional): Title of the plot.
     - xlabel (str, optional): Label for the x-axis.
     - legend_label (str): Label for the data in the legend.
+    - color (str): Color of the data points.
+    - alpha (float): Transparency of the data points.
     - figsize (Tuple[int, int]): Size of the plot.
     - ax (matplotlib.Axes, optional): Axes object to plot on. If not specified, a new figure object is created.
     - return_ax (bool, optional): If True, returns the Axes object. Default is False.
-    - hist_kwargs (dict, optional): Arbitrary keyword arguments to be passed to sns.histplot function. Default is None.
+    - hist_kwargs (dict, optional): Arbitrary keyword arguments to be passed to histogram function. Default is None.
     - save_kwargs (dict, optional): Arbitrary keyword arguments to be passed to save_figure function. Default is None.
 
     Returns:
@@ -265,28 +268,19 @@ def histogram_1d(
         n_bins = "auto"
 
     # Plot the histogram
-    if show_outliers:
-        # # determine the number of bins
-        # if n_bins is None:
-        #     n_bins = stats.compute_bin_size(X)
-        sns.histplot(
-            X,
-            bins=n_bins,
-            kde=show_density_curve,
-            ax=ax,
-            **hist_kwargs,
-        )
-    else:
-        # determine the number of bins
-        # if n_bins is None:
-        #     n_bins = stats.compute_bin_size(X[~is_outlier])
-        sns.histplot(
-            X[~is_outlier],
-            bins=n_bins,
-            kde=show_density_curve,
-            ax=ax,
-            **hist_kwargs,
-        )
+    X_plot = X if show_outliers else X[~is_outlier]
+    ax.hist(
+        X_plot,
+        bins=n_bins,
+        density=True,
+        color=color or "steelblue",
+        alpha=alpha,
+        **hist_kwargs,
+    )
+
+    # show density curve if specified
+    if show_density_curve:
+        sns.kdeplot(X_plot, color=color or "black", ax=ax)
 
     # how many inliners and outliers
     n_inliers = np.sum(~is_outlier)
@@ -318,7 +312,7 @@ def histogram_1d(
     # Set title and labels
     ax.set_title(title or "")
     ax.set_xlabel(xlabel or column)
-    ax.set_ylabel("Frequency")
+    ax.set_ylabel("Density")
 
     # display legend if scatter is True and show_outliers is True
     if scatter and show_outliers:
@@ -345,6 +339,7 @@ def histogram_1d_with_clusters(
     figsize: Tuple[int, int] = _FIGSIZE_HIST,
     ax: plt.Axes = None,
     return_ax: bool = False,
+    hist_kwargs: dict = dict(),
     save_kwargs: Optional[Dict] = None,
     **kwargs,
 ) -> Optional[plt.Axes]:
@@ -396,11 +391,12 @@ def histogram_1d_with_clusters(
         show_density_curve=False,
         ax=ax,
         return_ax=True,
-        hist_kwargs={
-            "stat": "density",
-            "element": "step",
+        color="black",
+        hist_kwargs=hist_kwargs
+        or {
+            "histtype": "step",
             "fill": False,
-            "color": "black",
+            "linewidth": 1.3,
         },
     )
 

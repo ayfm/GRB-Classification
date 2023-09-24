@@ -44,7 +44,7 @@ def get_model_path(
         env.DIR_MODELS,
         catalog_name,
         features_txt,
-        # f"{n_components}G",
+        f"{n_components}G",
         subdir or "",
         model_name,
     )
@@ -221,6 +221,8 @@ def load_all_models(
     search_path = os.path.join(env.DIR_MODELS, "**", "*.model")
     # Get all the .model file paths
     files = [f for f in glob.glob(search_path, recursive=True) if os.path.isfile(f)]
+    # remove experimental models
+    files = [f for f in files if not os.path.dirname(f).endswith("experiments")]
 
     # parse all model names
     filtered_model_dicts = [parse_model_name(os.path.basename(f)) for f in files]

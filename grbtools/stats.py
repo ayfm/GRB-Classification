@@ -686,6 +686,8 @@ def density_distance_score(
     The DeD score balances the intra-cluster densities against the inter-cluster
     distances to evaluate the quality of clustering.
 
+    A higher value suggests better clustering.
+
     Parameters:
     - X (np.ndarray): The input data array where each row is a data point.
     - labels (np.ndarray): The labels or clusters assigned for each data point.
@@ -693,7 +695,7 @@ def density_distance_score(
                               Default is 'euclidean'.
 
     Returns:
-    - float: The DeD score. A higher value suggests better clustering.
+    - float: The DeD score.
 
     Raises:
     - ValueError: If the metric choice is neither 'euclidean' nor 'mahalanobis'.
@@ -756,11 +758,7 @@ def density_distance_score(
                         len(cluster_j_data),
                     )
                     inv_cov_matrix = np.linalg.inv(pooled_cov)
-                    distances.append(
-                        mahalanobis(
-                            mean_i[np.newaxis], mean_j[np.newaxis], VI=inv_cov_matrix
-                        )
-                    )
+                    distances.append(mahalanobis(mean_i, mean_j, VI=inv_cov_matrix))
 
     avg_dispersion = np.mean(distances)
 
@@ -810,6 +808,11 @@ def dunn_index(X, labels, metric="euclidean"):
 
     # get unique labels
     unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+
+    # Handle the case with only one cluster
+    if n_clusters == 1:
+        return np.nan
 
     # compute inverse covariance matrix for each cluster
     VI_cluster = dict()
