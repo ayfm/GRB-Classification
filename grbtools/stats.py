@@ -3,14 +3,27 @@ from typing import Dict, Iterable, Literal, Optional, Tuple, Union
 
 import numpy as np
 import ot
-from scipy.spatial.distance import cdist
-from scipy.stats import (anderson, entropy, gaussian_kde, kstest, normaltest,
-                         shapiro)
+from scipy.spatial.distance import cdist, pdist, mahalanobis
+from scipy.stats import (
+    anderson,
+    entropy,
+    gaussian_kde,
+    iqr,
+    kstest,
+    normaltest,
+    shapiro,
+    norm,
+)
 from sklearn.cluster import KMeans
-from sklearn.metrics import calinski_harabasz_score as chs
-from sklearn.metrics import davies_bouldin_score as dbs
 from sklearn.metrics import silhouette_samples
+from sklearn.mixture import GaussianMixture
 from sklearn.neighbors import KernelDensity, NearestNeighbors
+import random
+
+from . import env
+
+# get logger
+logger = env.get_logger()
 
 
 def _set_seed(seed: Union[int, None]) -> None:
@@ -26,54 +39,140 @@ def _set_seed(seed: Union[int, None]) -> None:
         np.random.seed(seed)
 
 
-def compute_mahalanobis_distance(
-    X: np.ndarray,
-    mean: Union[np.ndarray, None] = None,
-    covar: Union[np.ndarray, None] = None,
+def _check_distance_metric(metric: str) -> str:
+    """
+    Check if the provided metric is valid.
+
+    Parameters
+    ----------
+    metric : str
+        The distance metric to use. Can be 'Euclidean' or 'Mahalanobis'.
+
+    Returns
+    -------
+    str
+        The validated metric (lowercase).
+
+    Raises
+    ------
+    ValueError
+        If the metric is not one of {'Euclidean', 'Mahalanobis'}.
+    """
+    # make sure that metric is lowercase
+    metric = metric.lower()
+
+    # Validate metric choice
+    if metric not in ["euclidean", "mahalanobis"]:
+        raise ValueError(
+            f"Unsupported distance metric: {metric}. Options are 'Euclidean' or 'Mahalanobis'."
+        )
+
+    return metric
+
+
+def AIC(model: GaussianMixture, data: np.ndarray) -> float:
+    """
+    Compute the Akaike Information Criterion (AIC) for a given GaussianMixtureModel and data.
+
+    Parameters:
+    -----------
+    model : GaussianMixture
+        The Gaussian mixture model instance.
+
+    data : np.ndarray
+        The dataset to compute the AIC for.
+
+    Returns:
+    --------
+    float
+        The computed AIC value.
+    """
+    return model.aic(data)
+
+
+def BIC(model: GaussianMixture, data: np.ndarray) -> float:
+    """
+    Compute the Bayesian Information Criterion (BIC) for a given GaussianMixtureModel and data.
+
+    Parameters:
+    -----------
+    model : GaussianMixture
+        The Gaussian mixture model instance.
+
+    data : np.ndarray
+        The dataset to compute the BIC for.
+
+    Returns:
+    --------
+    float
+        The computed BIC value.
+    """
+    return model.bic(data)
+
+
+def mahalanobis_distance(
+    X: np.ndarray, mean: Optional[np.ndarray] = None, covar: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
     Calculates the Mahalanobis distance between data points and means.
 
-    Args:
-        X (np.ndarray): Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
-        mean (Union[np.ndarray, None], optional): Mean values to use for computing the distance. If None, the mean will be calculated from the input data. Defaults to None.
-        covar (Union[np.ndarray, None], optional): Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated from the input data. Defaults to None.
+    Parameters:
+    -----------
+    X : np.ndarray
+        Input data of shape (N, d), where N is the number of data points and d is the number of dimensions.
+
+    mean : np.ndarray, optional
+        Mean values to use for computing the distance. If None, the mean will be calculated from the input data.
+
+    covar : np.ndarray, optional
+        Covariance matrix to use for computing the distance. If None, the covariance matrix will be calculated
+        from the input data.
 
     Returns:
-         np.ndarray: Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
+    --------
+    np.ndarray:
+        Array of shape (1, N) containing the Mahalanobis distances between each data point and the mean.
 
     Raises:
-        AssertionError: If the shape of the mean or covariance matrix is not correct.
+    -------
+    ValueError:
+        If the shape of the mean or covariance matrix is not correct.
 
     Notes:
-        - The Mahalanobis distance is a measure of the distance between a data point and a distribution, taking into account the covariance structure of the distribution.
-        - If mean is None, it is calculated as the mean of the input data along the specified axis.
-        - If covar is None, it is calculated as the covariance matrix of the input data.
+    ------
+    - The Mahalanobis distance is a measure of the distance between a data point and a distribution, taking into
+      account the covariance structure of the distribution.
     """
+    N, d = X.shape if len(X.shape) > 1 else (1, X.shape[0])
 
-    # check if mean is given
+    # Calculate mean and covariance if not provided
     if mean is None:
         mean = np.mean(X, axis=0)
-    # check if covar is given
     if covar is None:
-        covar = np.cov(X.T)
+        if d == 1:
+            covar = np.var(X, ddof=0)
+        else:
+            covar = np.cov(X, rowvar=False, ddof=0)
 
-    # get size of the data
-    N, d = X.shape
+    # Reshape mean if necessary
+    if len(mean.shape) == 1:
+        mean = mean.reshape(1, -1)
 
-    # check dimensions
-    assert mean.shape in ((1, d), (d,)), "Mean shape is not correct"
-    assert covar.shape == (d, d), "Covariance shape is not correct"
+    # Validate shapes
+    if mean.shape not in ((d,), (1, d)):
+        raise ValueError("Mean shape is not correct.")
+    if d > 1 and covar.shape != (d, d):
+        raise ValueError("Covariance matrix shape is not correct.")
 
-    # reshape mean
+    # Handle 1-dimensional data
+    if d == 1:
+        return np.abs(X.flatten() - mean) / np.sqrt(covar)
+
     mean = mean.reshape(1, -1)
-
-    # get inverse covariance matrix
     icovar = np.linalg.inv(covar)
-    # calculate mahalanobis distance of each data point
-    mah_dist = cdist(X, mean, VI=icovar, metric="mahalanobis").reshape(1, -1)
+    delta = X - mean
+    mah_dist = np.sqrt(np.sum(np.dot(delta, icovar) * delta, axis=1)).reshape(1, -1)
 
-    # return distance
     return mah_dist
 
 
@@ -106,6 +205,9 @@ def silhouette_samples_mahalanobis(
     # how many clusters?
     n_clusters = len(cluster_labels)
 
+    # get size of the data
+    N, d = X.shape if len(X.shape) > 1 else (1, X.shape[0])
+
     # if there is only one cluster, we cannot calculate silhouette coefficients
     if n_clusters == 1:
         raise ValueError("Cannot calculate silhouette coefficients for one cluster")
@@ -115,18 +217,14 @@ def silhouette_samples_mahalanobis(
         means = np.array([np.mean(X[labels == i], axis=0) for i in cluster_labels])
     # check if cluster covariances' are given
     if covars is None:
-        covars = np.array([np.cov(X[labels == i].T) for i in cluster_labels])
-
-    # get size of the data
-    N, d = X.shape
-
-    # check dimensions of means
-    # The dimension must be (n_clusters, d)
-    assert means.shape == (n_clusters, d), "Means shape is not correct"
-
-    # check dimensions of covars
-    # The dimension must be (n_clusters, d, d)
-    assert covars.shape == (n_clusters, d, d), "Covariances shape is not correct"
+        covars = np.array(
+            [
+                np.cov(X[labels == i], rowvar=False, ddof=0)
+                if len(X.shape) > 1
+                else np.var(X, ddof=0)
+                for i in cluster_labels
+            ]
+        )
 
     # create distance array
     mah_dist_arr = np.zeros((N, n_clusters))
@@ -134,9 +232,7 @@ def silhouette_samples_mahalanobis(
     # calculate mahalanobis distance for each cluster
     for i in range(n_clusters):
         # calculate mahalanobis distance based on the mean and covariance matrix
-        mah_dist_arr[:, i] = compute_mahalanobis_distance(
-            X, mean=means[i], covar=covars[i]
-        )
+        mah_dist_arr[:, i] = mahalanobis_distance(X, mean=means[i], covar=covars[i])
 
     # calculate intra-cluster distance (a(x))
     a_x = np.array([mah_dist_arr[i, labels[i]] for i in range(N)]).reshape(-1, 1)
@@ -149,7 +245,7 @@ def silhouette_samples_mahalanobis(
     b_x = mah_dist_arr.min(axis=1).reshape(-1, 1)
 
     # calculate silhouette coeffs
-    sil_coeffs = (b_x - a_x) / np.hstack((b_x, a_x)).max(axis=1).reshape(-1, 1)
+    sil_coeffs = (b_x - a_x) / np.maximum(b_x, a_x)
 
     # return silhouette coeffs
     return sil_coeffs
@@ -158,7 +254,7 @@ def silhouette_samples_mahalanobis(
 def silhouette_score(
     X: np.ndarray,
     labels: np.ndarray,
-    metric: Literal["Euclidean", "Mahalanobis"] = None,
+    metric: str = "Euclidean",
 ) -> Dict:
     """
     Calculates the silhouette score for a clustering.
@@ -180,6 +276,9 @@ def silhouette_score(
         ValueError: If the metric is not one of {"Euclidean", "Mahalanobis"}.
 
     """
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
     # how many clusters?
     n_clusters = len(set(labels))
 
@@ -187,14 +286,10 @@ def silhouette_score(
     if n_clusters == 1:
         return {"mean": np.nan, "coeffs": np.nan}
 
-    # default metric is Euclidean
-    if metric is None:
-        metric = "Euclidean"
-
-    if metric == "Euclidean":
+    if metric == "euclidean":
         sample_coeffs = silhouette_samples(X, labels, metric="euclidean")
 
-    elif metric == "Mahalanobis":
+    elif metric == "mahalanobis":
         sample_coeffs = silhouette_samples_mahalanobis(X, labels)
 
     else:
@@ -206,9 +301,11 @@ def silhouette_score(
     return {"mean": mean_coeff, "coeffs": sample_coeffs}
 
 
-def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
+def intra_cluster_dispersion(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
     """
-    Compute the total intra-cluster dispersion (within-cluster sum of squares) for the given data and labels.
+    Compute the total intra-cluster dispersion for the given data and labels based on the specified distance metric.
 
     Parameters
     ----------
@@ -218,21 +315,116 @@ def intra_cluster_dispersion(X: np.ndarray, labels: np.ndarray) -> float:
     labels : np.ndarray, shape = [n_samples]
         The labels predicting the cluster each sample belongs to. This should align with the samples in `X`.
 
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
     Returns
     -------
     float:
         The total intra-cluster dispersion for the given data and labels. This is the sum of the squared distances of each
-        point to the centroid of its assigned cluster.
+        point to the centroid of its assigned cluster based on the specified distance metric.
 
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
+
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
     clusters = np.unique(labels)
     dispersion = 0
+
     for cluster in clusters:
         cluster_points = X[labels == cluster]
-        centroid = cluster_points.mean(axis=0)
-        dispersion += ((cluster_points - centroid) ** 2).sum()
+
+        if metric == "euclidean":
+            centroid = cluster_points.mean(axis=0)
+            dispersion += ((cluster_points - centroid) ** 2).sum()
+
+        elif metric == "mahalanobis":
+            cluster_mean = np.mean(cluster_points, axis=0)
+            cluster_cov = np.cov(cluster_points, rowvar=False)
+            mah_dists = mahalanobis_distance(
+                cluster_points, mean=cluster_mean, covar=cluster_cov
+            )
+            dispersion += np.sum(mah_dists**2)
 
     return dispersion
+
+
+def inter_cluster_dispersion(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+):
+    """
+    Calculate the inter-cluster dispersion for the provided data and labels using the specified metric.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        The dataset, with shape (n_samples, n_features).
+        It represents the input samples where each row is a sample and each column is a feature of the sample.
+        Can handle 1-dimensional data (n_samples,) or n-dimensional data.
+
+    labels : np.ndarray
+        Cluster assignments for each data point. Shape is (n_samples,).
+
+    metric : str, optional
+        The type of distance metric to use. Can be 'Euclidean' or 'Mahalanobis'.
+        Default is 'Euclidean'.
+
+    Returns
+    -------
+    float
+        The computed inter-cluster dispersion.
+
+    Raises
+    ------
+    ValueError
+        If the provided metric is not one of {'Euclidean', 'Mahalanobis'}.
+    """
+
+    # Ensure the input data is at least 2D
+    X = np.atleast_2d(X)
+
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Compute the overall mean of the data
+    overall_mean = np.mean(X, axis=0)
+
+    # Initialize the inter-cluster dispersion
+    inter_disp = 0.0
+
+    # Precompute the inverse covariance matrix for Mahalanobis distance
+    if metric == "mahalanobis":
+        if X.shape[1] == 1:  # Check if the data is 1-dimensional
+            # In 1D, the inverse covariance matrix is just 1/variance
+            inv_cov_matrix = 1.0 / np.var(X)
+        else:
+            cov_matrix = np.cov(X, rowvar=False)
+            inv_cov_matrix = np.linalg.inv(cov_matrix)
+
+    # Loop through each unique cluster label
+    for cluster in np.unique(labels):
+        cluster_points = X[labels == cluster]
+        # Number of points in the current cluster
+        num_points_in_cluster = cluster_points.shape[0]
+        # Mean of the current cluster
+        cluster_mean = np.mean(cluster_points, axis=0)
+
+        # Compute the squared distance between the cluster mean and the overall mean
+        if metric == "euclidean":
+            squared_distance = np.sum((cluster_mean - overall_mean) ** 2)
+        else:  # metric == "Mahalanobis"
+            squared_distance = (
+                mahalanobis(cluster_mean, overall_mean, VI=inv_cov_matrix) ** 2
+            )
+
+        inter_disp += num_points_in_cluster * squared_distance
+
+    return inter_disp
 
 
 def gap_statistics(
@@ -269,7 +461,7 @@ def gap_statistics(
         The clusterer to use for the data. If `None`, `KMeans` with the same number of clusters as the labels will be used.
 
     n_repeat : int, optional
-        Number of times to generate a reference dataset and compute its dispersion. Default is 10.
+        Number of times to generate a reference dataset and compute its dispersion. Default is 100.
 
     random_state : int or None, optional
         Determines random number generation for dataset creation. Pass an int for reproducible output across multiple
@@ -295,19 +487,30 @@ def gap_statistics(
     # set the random state
     _set_seed(random_state)
 
+    # if the data is just a column vector, or row vector, make it flattened
+    if X.shape[1] == 1 or X.shape[0] == 1:
+        X = X.flatten()
+
+    # get min and max values for each feature
+    xmin = np.min(X, axis=0)
+    xmax = np.max(X, axis=0)
+
     for i in range(n_repeat):
         # Generate a reference dataset
-        ref_X = np.random.uniform(np.min(X, axis=0), np.max(X, axis=0), X.shape)
+        ref_X = np.random.uniform(xmin, xmax, X.shape)
+        # reshape if the data is 1-dimensional
+        if len(ref_X.shape) == 1:
+            ref_X = ref_X.reshape(-1, 1)
 
         # Fit the model to the reference data and get the labels
         ref_labels = clusterer.fit_predict(ref_X)
 
         # Compute the dispersion for the reference data
-        ref_disp = intra_cluster_dispersion(ref_X, ref_labels)
+        ref_disp = intra_cluster_dispersion(ref_X, ref_labels, metric="Euclidean")
         ref_disps[i] = np.log(ref_disp)
 
     # Compute the dispersion for the original data
-    orig_disp = intra_cluster_dispersion(X, labels)
+    orig_disp = intra_cluster_dispersion(X, labels, metric="Euclidean")
     orig_disp = np.log(orig_disp)
 
     # Compute the gap statistic
@@ -317,9 +520,11 @@ def gap_statistics(
     return {"gap": gap, "err": gap_err}
 
 
-def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
+def davies_bouldin_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
     """
-    Compute the Davies-Bouldin score for a clustering result.
+    Compute the Davies-Bouldin score for a clustering result based on the specified distance metric.
 
     The Davies-Bouldin index (DBI) is a metric of internal cluster validation that measures the average 'similarity'
     between clusters, where the similarity is a ratio of within-cluster distances to between-cluster distances.
@@ -337,23 +542,81 @@ def davies_bouldin_score(X: np.ndarray, labels: np.ndarray) -> float:
     labels : array-like, shape = [n_samples]
         Cluster labels for each sample in the input data.
 
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
     Returns
     -------
     davies_bouldin : float
         The Davies-Bouldin score for the input clustering.
+
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
-    # how many clusters?
-    n_clusters = len(set(labels))
-    # if there is only one cluster, we cannot calculate Davies-Bouldin score
+    # check metric
+    metric = _check_distance_metric(metric)
+
+    n_samples, _ = X.shape
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+
+    # Return NaN if only one cluster
     if n_clusters == 1:
         return np.nan
 
-    return dbs(X, labels)
+    cluster_k = [X[labels == k] for k in unique_labels]
+    centroids = [np.mean(k, axis=0) for k in cluster_k]
+
+    # Compute covariances for Mahalanobis distance
+    covs = []
+    if metric == "mahalanobis":
+        for k in cluster_k:
+            if len(k) == 1:
+                covs.append(np.var(k, ddof=0))
+            else:
+                covs.append(np.cov(k, rowvar=False, ddof=0))
+
+    # Compute s_i for each cluster based on metric choice
+    if metric == "euclidean":
+        s = [
+            np.mean([np.linalg.norm(p - c) for p in k])
+            for k, c in zip(cluster_k, centroids)
+        ]
+    elif metric == "mahalanobis":
+        s = [
+            np.mean([mahalanobis_distance(p.reshape(1, -1), c, cov) for p in k])
+            for k, c, cov in zip(cluster_k, centroids, covs)
+        ]
+
+    db = 0
+    for i in range(n_clusters):
+        max_ratio = float("-inf")
+        for j in range(n_clusters):
+            if i != j:
+                if metric == "euclidean":
+                    d = np.linalg.norm(centroids[i] - centroids[j])
+                else:  # For mahalanobis
+                    pooled_cov = pooled_covariance(
+                        covs[i], covs[j], len(cluster_k[i]), len(cluster_k[j])
+                    )
+                    d = mahalanobis_distance(
+                        centroids[i].reshape(1, -1), centroids[j], pooled_cov
+                    )[0][0]
+                ratio = (s[i] + s[j]) / d
+                max_ratio = max(max_ratio, ratio)
+        db += max_ratio
+
+    # Calculate Davies-Bouldin score
+    return db / n_clusters
 
 
-def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
+def calinski_harabasz_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "Euclidean"
+) -> float:
     """
-    Compute the Calinski-Harabasz score for a clustering result.
+    Compute the Calinski-Harabasz score for a clustering result based on the specified distance metric.
 
     The Calinski-Harabasz index (CHI) is a metric of internal cluster validation that measures the ratio of
     between-cluster dispersion to within-cluster dispersion. Higher values of the CHI indicate better clustering.
@@ -372,77 +635,246 @@ def calinski_harabasz_score(X: np.ndarray, labels: np.ndarray) -> float:
     labels : array-like, shape = [n_samples]
         Cluster labels for each sample in the input data.
 
+    metric: str, optional (default="Euclidean")
+        The distance metric to use. It must be either "Euclidean" or "Mahalanobis".
+
     Returns
     -------
     calinski_harabasz : float
         The Calinski-Harabasz score for the input clustering.
+
+    Raises
+    ------
+    ValueError:
+        If the provided distance metric is neither "Euclidean" nor "Mahalanobis".
     """
-    # how many clusters?
+
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Determine the number of samples and clusters
+    n_samples = X.shape[0]
     n_clusters = len(set(labels))
-    # if there is only one cluster, we cannot calculate Calinski-Harabasz score
+
+    # Single cluster scenarios result in undefined CH score
     if n_clusters == 1:
         return np.nan
 
-    return chs(X, labels)
+    # Compute between-cluster dispersion
+    between_dispersion = inter_cluster_dispersion(X, labels, metric=metric)
+
+    # Compute within-cluster dispersion
+    intra_dispersion = intra_cluster_dispersion(X, labels, metric=metric)
+
+    # If there's no intra-cluster dispersion, default the score to 1.0
+    if intra_dispersion == 0:
+        return 1.0
+
+    # Calculate the CH score
+    score = (between_dispersion / (n_clusters - 1)) / (
+        intra_dispersion / (n_samples - n_clusters)
+    )
+
+    return score
 
 
-def hopkins_statistic(
-    X: np.ndarray, sample_ratio: float = 0.05, random_state=None
+def density_distance_score(
+    X: np.ndarray, labels: np.ndarray, metric: str = "euclidean"
 ) -> float:
     """
-    Calculates the Hopkins statistic - a statistic which indicates the cluster tendency of data.
+    Calculate the Density Distance Score (DeD score) for clustering.
+
+    The DeD score balances the intra-cluster densities against the inter-cluster
+    distances to evaluate the quality of clustering.
+
+    A higher value suggests better clustering.
 
     Parameters:
-    X (np.ndarray): The dataset.
-    sample_ratio (float): The ratio of datapoints to sample for calculating the statistic.
-    random_state (int): The random seed for sampling.
+    - X (np.ndarray): The input data array where each row is a data point.
+    - labels (np.ndarray): The labels or clusters assigned for each data point.
+    - metric (str, optional): The metric used for distance calculation. Choices are 'euclidean' or 'mahalanobis'.
+                              Default is 'euclidean'.
 
     Returns:
-    H (float): The Hopkins statistic, between 0 and 1. A value near 1 tends to indicate the data is highly clusterable.
+    - float: The DeD score.
 
-    Notes:
-
-       - If the value of H is close to 1, then the data is highly clusterable, and not uniformly distributed. This means it's a good candidate for clustering.
-       - If the value of H is around 0.5, then it's not clear whether the data is uniformly distributed or whether it has clusters. It's generally a borderline case.
-       - If the value of H is close to 0, then the data is likely uniformly distributed, and so is probably not a good candidate for clustering.
-
-       - If H > 0.75, the data is considered to have a high tendency to cluster.
-       - If 0.5 < H < 0.75, the data may have a tendency to cluster, but it's not clear.
-       - If H < 0.5, the data is unlikely to have a meaningful cluster structure.
+    Raises:
+    - ValueError: If the metric choice is neither 'euclidean' nor 'mahalanobis'.
     """
 
-    # reshape the data if it's 1-dimensional
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Reshape the data if it's 1-dimensional
     if len(X.shape) == 1:
         X = X.reshape(-1, 1)
 
-    # get the number of datapoints and dimension
-    N, d = X.shape
+    # Extract shape details
+    N, dim = X.shape
 
-    # number of samples to take
-    n = int(sample_ratio * N)
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
 
-    # set the random state
-    _set_seed(random_state)
+    # Handle the case with only one cluster
+    if n_clusters == 1:
+        return np.nan
 
-    # randomly sample n datapoints
-    samples = sample(X, size=n, replace=False)
-
-    # Fit a nearest neighbor model to the data
-    nbrs = NearestNeighbors(n_neighbors=2, algorithm="brute").fit(X)
-
-    # Calculate distance to nearest neighbor for each sample point
-    sum_d = nbrs.kneighbors(samples, return_distance=True)[0].sum()
-
-    # Generate n random points in the same dimensional space and calculate their distance to nearest neighbor
-    random_points = np.array(
-        [np.random.uniform(np.amin(X, axis=0), np.amax(X, axis=0)) for _ in range(n)]
+    # Compute average intra-cluster density
+    total_density = sum(
+        np.linalg.det(np.cov(X[labels == label], rowvar=False))
+        if dim > 1
+        else np.var(X[labels == label])
+        for label in unique_labels
     )
-    sum_u = nbrs.kneighbors(random_points, return_distance=True)[0].sum()
+    avg_density = total_density / n_clusters
 
-    # Hopkins statistic
-    H = sum_u / (sum_u + sum_d)
+    # Compute average inter-cluster distances between centroids
+    distances = []
+    for i, label_i in enumerate(unique_labels[:-1]):
+        for label_j in unique_labels[i + 1 :]:
+            mean_i, mean_j = np.mean(X[labels == label_i], axis=0), np.mean(
+                X[labels == label_j], axis=0
+            )
 
-    return H
+            if metric == "euclidean":
+                distances.append(np.linalg.norm(mean_i - mean_j))
+            else:
+                cluster_i_data, cluster_j_data = (
+                    X[labels == label_i],
+                    X[labels == label_j],
+                )
+                if dim == 1:
+                    pooled_std = pooled_covariance(
+                        np.var(cluster_i_data),
+                        np.var(cluster_j_data),
+                        len(cluster_i_data),
+                        len(cluster_j_data),
+                    )
+                    distances.append(np.abs(mean_i - mean_j) / pooled_std)
+                else:
+                    pooled_cov = pooled_covariance(
+                        np.cov(cluster_i_data, rowvar=False),
+                        np.cov(cluster_j_data, rowvar=False),
+                        len(cluster_i_data),
+                        len(cluster_j_data),
+                    )
+                    inv_cov_matrix = np.linalg.inv(pooled_cov)
+                    distances.append(mahalanobis(mean_i, mean_j, VI=inv_cov_matrix))
+
+    avg_dispersion = np.mean(distances)
+
+    return avg_density / avg_dispersion
+
+
+def dunn_index(X, labels, metric="euclidean"):
+    """
+    Compute the Dunn Index for the given data and labels.
+
+    The Dunn Index is a metric for evaluating clustering quality. It is the ratio between the smallest distance between
+    observations not in the same cluster to the largest intra-cluster distance. A larger Dunn Index indicates better
+    clustering quality.
+
+    Mathematically, for K clusters, it is defined as:
+    Dunn Index = min_{i, j} (dist(C_i, C_j)) / max_k (diam(C_k))
+    where dist() is the distance between clusters and diam() is the diameter of cluster (i.e., the largest distance between
+    two samples in the cluster).
+
+    The value of the Dunn Index ranges from 0 to infinity. A value close to 0 indicates that clusters are overlapping, while
+    a larger value indicates that clusters are more distinct.
+
+    Parameters:
+    ----------
+    X : array-like of shape (n_samples, n_features)
+        Data matrix.
+    labels : array-like of shape (n_samples,)
+        Cluster assignments for each data point.
+    metric : str, optional (default="euclidean")
+        Distance metric to use. Options are "euclidean" or "mahalanobis".
+
+    Returns:
+    -------
+    float
+        Dunn Index for the given clustering.
+
+    """
+    # Validate metric choice
+    metric = _check_distance_metric(metric)
+
+    # Reshape the data if it's 1-dimensional
+    if len(X.shape) == 1:
+        X = X.reshape(-1, 1)
+
+    # Extract shape details
+    N, dim = X.shape
+
+    # get unique labels
+    unique_labels = np.unique(labels)
+    n_clusters = len(unique_labels)
+
+    # Handle the case with only one cluster
+    if n_clusters == 1:
+        return np.nan
+
+    # compute inverse covariance matrix for each cluster
+    VI_cluster = dict()
+    if metric == "mahalanobis":
+        for label in unique_labels:
+            members = X[labels == label]
+
+            if members.shape[0] > 1:  # More than one member in the cluster
+                if dim > 1:
+                    VI_cluster[label] = np.linalg.inv(np.cov(members, rowvar=False))
+                else:
+                    VI_cluster[label] = 1 / np.var(members)
+            else:
+                VI_cluster[label] = np.nan
+
+    # Compute intra-cluster distances (maximal distance within each cluster)
+    intra_cluster_dists = []
+    for label in unique_labels:
+        members = X[labels == label]
+
+        # Cluster with one point has intra-cluster distance of 0
+        if members.shape[0] <= 1:
+            intra_cluster_dists.append(0)
+            continue
+
+        if metric == "euclidean":
+            intra_cluster_distance = np.max(pdist(members))
+        else:
+            VI = VI_cluster[label]
+            intra_cluster_distance = np.max(pdist(members, VI=VI, metric="mahalanobis"))
+
+        intra_cluster_dists.append(intra_cluster_distance)
+
+    # Compute the maximum intra-cluster distance
+    max_intra_cluster_dist = np.max(intra_cluster_dists)
+
+    # Compute inter-cluster distances (minimal distance between clusters)
+    inter_cluster_dists = []
+    for i, label_i in enumerate(unique_labels):
+        for j, label_j in enumerate(unique_labels):
+            if i < j:  # Avoid duplicate comparisons and self-comparisons
+                members_i = X[labels == label_i]
+                members_j = X[labels == label_j]
+
+                if metric == "euclidean":
+                    # cross_dists = np.min(pdist(np.vstack([members_i, members_j])))
+                    cross_dists = np.min(cdist(members_i, members_j))
+                    inter_cluster_dists.append(cross_dists)
+
+                elif metric == "mahalanobis":
+                    VI = VI_cluster[label_i]
+                    cross_dists = np.min(
+                        cdist(members_i, members_j, VI=VI, metric="mahalanobis")
+                    )
+                    inter_cluster_dists.append(cross_dists)
+
+    # find the minimum inter-cluster distance
+    min_inter_cluster_dist = np.min(inter_cluster_dists)
+
+    # Compute the Dunn Index
+    return min_inter_cluster_dist / max_intra_cluster_dist
 
 
 def sample(
@@ -512,6 +944,55 @@ def sample(
     samples = X[idx]
 
     return samples
+
+
+def hopkins_statistic(
+    X: np.ndarray, sample_ratio: float = 0.05, random_state=None
+) -> float:
+    """
+    Calculates the Hopkins statistic - a statistic which indicates the cluster tendency of data.
+
+    Parameters:
+    X (np.ndarray): The dataset.
+    sample_ratio (float): The ratio of datapoints to sample for calculating the statistic.
+    random_state (int): The random seed for sampling.
+
+    Returns:
+    H (float): The Hopkins statistic, between 0 and 1. A value near 1 tends to indicate the data is highly clusterable.
+
+    Notes:
+
+       - If the value of H is close to 1, then the data is highly clusterable, and not uniformly distributed. This means it's a good candidate for clustering.
+       - If the value of H is around 0.5, then it's not clear whether the data is uniformly distributed or whether it has clusters. It's generally a borderline case.
+       - If the value of H is close to 0, then the data is likely uniformly distributed, and so is probably not a good candidate for clustering.
+
+       - If H > 0.75, the data is considered to have a high tendency to cluster.
+       - If 0.5 < H < 0.75, the data may have a tendency to cluster, but it's not clear.
+       - If H < 0.5, the data is unlikely to have a meaningful cluster structure.
+    """
+
+    # reshape the data if it's 1-dimensional
+    if len(X.shape) == 1:
+        X = X.reshape(-1, 1)
+
+    # X: numpy array of shape (n_samples, n_features)
+    n = X.shape[0]
+    d = X.shape[1]
+    m = int(sample_ratio * n)
+
+    _set_seed(random_state)
+    nbrs = NearestNeighbors(n_neighbors=1).fit(X)
+    # u_dist
+    rand_X = np.random.uniform(X.min(axis=0), X.max(axis=0), size=(m, d))
+    u_dist = nbrs.kneighbors(rand_X, return_distance=True)[0]
+    # w_dist
+    idx = np.random.choice(n, size=m, replace=False)
+    w_dist = nbrs.kneighbors(X[idx, :], 2, return_distance=True)[0][:, 1]
+
+    U = (u_dist**d).sum()
+    W = (w_dist**d).sum()
+    H = U / (U + W)
+    return H
 
 
 def js_divergence(pdf1: np.ndarray, pdf2: np.ndarray, base=2) -> float:
@@ -878,7 +1359,7 @@ def wasserstein_distance_bootstrap(
 
 
 def normality_test_shapiro_wilkinson(
-    X: np.ndarray, alpha: float = 0.05
+    X: np.ndarray, alpha: float = 0.05, verbose: bool = True
 ) -> Dict[str, float]:
     """
     Perform a Shapiro-Wilkinson test for normality on the input data.
@@ -898,6 +1379,9 @@ def normality_test_shapiro_wilkinson(
     alpha : float, default=0.05
         Significance level for the test.
 
+    verbose : bool, default=True
+        If True, print the results of the test.
+
     Returns
     -------
     dict
@@ -913,18 +1397,22 @@ def normality_test_shapiro_wilkinson(
 
     stat, p = shapiro(X)
 
-    print("::: Shapiro-Wilkinson Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        print("  > Sample does not look Gaussian (reject H0)")
+    if verbose:
+        logger.info("::: Shapiro-Wilkinson Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
 
 def normality_test_ks(
-    X: np.ndarray, alpha: float = 0.05, normalization: bool = False
+    X: np.ndarray,
+    alpha: float = 0.05,
+    normalization: bool = False,
+    verbose: bool = True,
 ) -> Dict[str, float]:
     """
     Perform a Kolmogorov-Smirnov test for normality on the input data.
@@ -950,6 +1438,9 @@ def normality_test_ks(
     normalization : bool, default=False
         If True, the data is normalized before the test is performed. This is recommended when the data is not normally distributed.
 
+    verbose : bool, default=True
+        If True, print the results of the test.
+
     Returns
     -------
     dict
@@ -973,17 +1464,18 @@ def normality_test_ks(
     # test
     stat, p = kstest(X_, "norm")
 
-    print("::: Kolmogorov-Smirnov Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        print("  > Sample does not look Gaussian (reject H0)")
+    if verbose:
+        logger.info("::: Kolmogorov-Smirnov Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
 
-def normality_test_anderson(X: np.ndarray) -> Dict:
+def normality_test_anderson(X: np.ndarray, verbose: bool = True) -> Dict:
     """
     Perform the Anderson-Darling test for normality on the input data.
 
@@ -1001,6 +1493,8 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     ----------
     X : np.ndarray
         The array containing the sample to be tested.
+    verbose : bool, default=True
+        If True, print the results of the test.
 
     Returns
     -------
@@ -1018,17 +1512,23 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     """
 
     result = anderson(X)
-    print("::: Anderson-Darling Normality Test :::")
-    print(f"  > Statistics={result.statistic:.3f}")
-    print(f"  > Critical values: {result.critical_values}")
-    print(f"  > Significance levels: {result.significance_level}")
 
-    for i in range(len(result.critical_values)):
-        sl, cv = result.significance_level[i], result.critical_values[i]
-        if result.statistic < cv:
-            print(f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level")
-        else:
-            print(f"  > Sample does not look Gaussian (reject H0) at the {sl}% level")
+    if verbose:
+        logger.info("::: Anderson-Darling Normality Test :::")
+        logger.info(f"  > Statistics={result.statistic:.3f}")
+        logger.info(f"  > Critical values: {result.critical_values}")
+        logger.info(f"  > Significance levels: {result.significance_level}")
+
+        for i in range(len(result.critical_values)):
+            sl, cv = result.significance_level[i], result.critical_values[i]
+            if result.statistic < cv:
+                logger.info(
+                    f"  > Sample looks Gaussian (fail to reject H0) at the {sl}% level"
+                )
+            else:
+                logger.info(
+                    f"  > Sample does not look Gaussian (reject H0) at the {sl}% level"
+                )
 
     return {
         "stat": result.statistic,
@@ -1037,7 +1537,9 @@ def normality_test_anderson(X: np.ndarray) -> Dict:
     }
 
 
-def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
+def normality_test_dagostino(
+    X: np.ndarray, alpha: float = 0.05, verbose: bool = True
+) -> Dict:
     """
     Perform D'Agostino's K^2 test for normality on the input data.
 
@@ -1055,6 +1557,8 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
         The array containing the sample to be tested.
     alpha : float, optional
         The significance level at which to test. The default is 0.05.
+    verbose : bool, default=True
+        If True, print the results of the test.
 
     Returns
     -------
@@ -1070,12 +1574,14 @@ def normality_test_dagostino(X: np.ndarray, alpha: float = 0.05) -> Dict:
     """
 
     stat, p = normaltest(X)
-    print("::: D'Agostino's K^2 Normality Test :::")
-    print(f"  > Statistics={stat:.3f}, p={p:.3f}")
-    if p > alpha:
-        print("  > Sample looks Gaussian (fail to reject H0)")
-    else:
-        print("  > Sample does not look Gaussian (reject H0)")
+
+    if verbose:
+        logger.info("::: D'Agostino's K^2 Normality Test :::")
+        logger.info(f"  > Statistics={stat:.3f}, p={p:.3f}")
+        if p > alpha:
+            logger.info("  > Sample looks Gaussian (fail to reject H0)")
+        else:
+            logger.info("  > Sample does not look Gaussian (reject H0)")
 
     return {"stat": stat, "p": p}
 
@@ -1085,6 +1591,7 @@ def detect_outliers(
     density_threshold: float,
     bandwidth: Union[float, str] = "scott",
     kernel: str = "gaussian",
+    verbose: bool = True,
 ) -> Dict:
     """
     Perform outlier detection using Kernel Density Estimation.
@@ -1108,6 +1615,9 @@ def detect_outliers(
     kernel : str, optional
         The kernel to be used in the density estimation. Should be one of the following:
         'gaussian', 'tophat', 'epanechnikov', 'exponential', 'linear', 'cosine'. The default is 'gaussian'.
+
+    verbose : bool, optional
+        If True, print the number of outliers detected.
 
     Returns
     -------
@@ -1141,4 +1651,184 @@ def detect_outliers(
     # Identify outliers as points with a density below the threshold
     is_outlier = dens < density_threshold
 
+    # Print the number of outliers detected
+    if verbose:
+        # how many data points?
+        n_X = len(X)
+        # how many outliers were detected
+        n_outliers = np.sum(is_outlier)
+        # how many inliers were detected
+        n_inliers = n_X - n_outliers
+        # calculate the percentage of outliers
+        outlier_percentage = int(np.round((n_outliers / n_X) * 100))
+        # calculate the percentage of inliers
+        inlier_percentage = 100 - outlier_percentage
+
+        logger.info(f">>> Total data points  : {len(X)}")
+        logger.info(f"  > Number of outliers : {n_outliers} [{outlier_percentage}%]")
+        logger.info(f"  > Number of inliers  : {n_inliers} [{inlier_percentage}%]")
+
     return {"is_outlier": is_outlier, "density": dens}
+
+
+def normalize(x: np.ndarray, invert: bool = False):
+    """
+    Normalize an array to [0, 1] range, considering NaN and inf values.
+
+    Parameters:
+    -----------
+    x : array-like
+        The input data to be normalized. Can be a list or numpy array.
+
+    invert : bool, optional (default=False)
+        If True, invert the values before normalization. This does not mean
+        the resulting values will be in [1, 0] range, it simply inverts the
+        sign of each value.
+
+    Returns:
+    --------
+    np.ndarray
+        The normalized array.
+    """
+
+    # Convert input to numpy array
+    x = np.array(x)
+
+    # If inverse flag is True, invert the values
+    if invert:
+        x = -x
+
+    # Compute the minimum and maximum, ignoring NaN values
+    min_ = np.nanmin(x)
+    max_ = np.nanmax(x)
+
+    # Normalize the array
+    x = (x - min_) / (max_ - min_)
+
+    return x
+
+
+from typing import Union
+import numpy as np
+
+
+def pooled_covariance(
+    cov1: Union[np.ndarray, float],
+    cov2: Union[np.ndarray, float],
+    size1: int,
+    size2: int,
+) -> Union[np.ndarray, float]:
+    """
+    Compute the pooled covariance.
+
+    The pooled covariance is a weighted average of two covariances. It's used to estimate
+    the common covariance of two populations when they're assumed to be the same.
+
+    Parameters
+    ----------
+    cov1 : np.ndarray or float
+        The covariance matrix or variance of the first group. If scalar, it represents variance.
+
+    cov2 : np.ndarray or float
+        The covariance matrix or variance of the second group. If scalar, it represents variance.
+
+    size1 : int
+        The size (number of observations) of the first group.
+
+    size2 : int
+        The size (number of observations) of the second group.
+
+    Returns
+    -------
+    Union[np.ndarray, float]
+        The pooled covariance. Returns a matrix if inputs were matrices, and a scalar if inputs were scalars.
+
+    Raises
+    ------
+    ValueError:
+        If the inputs are inconsistently scalars/matrices, or if the matrices are not square or of different shapes.
+    """
+    # Check for consistent input types
+    if np.isscalar(cov1) != np.isscalar(cov2):
+        raise ValueError("Both covariances should be either scalars or matrices")
+
+    # If input is matrix, validate shapes
+    if not np.isscalar(cov1):
+        if cov1.shape != cov2.shape or (
+            len(cov1.shape) == 2 and cov1.shape[0] != cov1.shape[1]
+        ):
+            raise ValueError(
+                "Covariance matrices should be square and have the same shape"
+            )
+
+    # Compute the pooled covariance
+    cov_pooled = ((size1 - 1) * cov1 + (size2 - 1) * cov2) / (size1 + size2 - 2)
+
+    return cov_pooled
+
+
+def compute_bin_size(data: np.array, method: str = "freedman") -> int:
+    """
+    Computes the efficient number of bins for a histogram using the specified method.
+
+    Parameters:
+    - data (numpy array): The input data for which the bin size needs to be computed.
+    - method (str): The method used for bin size calculation. Either "freedman" or "sturge".
+
+    Returns:
+    - int: The computed number of bins.
+
+    Method Explanations:
+    1. Freedman-Diaconis' Rule:
+       This method calculates the bin size based on data spread (IQR) and volume (n).
+       The formula for the bin width is given by:
+       bin width = 2 * IQR * n^(-1/3)
+       Where IQR is the interquartile range of the data.
+       The number of bins is then calculated as:
+       n_bins = (data's max value - data's min value) / bin width
+
+    2. Sturges' Formula:
+       This method calculates the number of bins based on data volume (n).
+       The formula is given by:
+       n_bins = 1 + 3.322 * log10(n)
+       Where n is the number of data points.
+
+    Raises:
+    - Exception: If an invalid method name is passed.
+    """
+
+    n_data = len(data)
+
+    if method == "freedman":
+        IQR = iqr(data)
+        bin_width = 2 * IQR * (n_data ** (-1 / 3))
+        n_bins = (np.max(data) - np.min(data)) / bin_width
+    elif method == "sturge":
+        n_bins = 1 + 3.322 * np.log10(n_data)
+    else:
+        raise ValueError("Method should be either 'freedman' or 'sturge'")
+
+    # Round to nearest integer and return
+    return int(round(n_bins))
+
+
+def confidence_to_nstd(confidence_level: float) -> float:
+    """
+    Convert confidence level (between 0 and 1) to number of standard deviations for a univariate Gaussian.
+    """
+    # Ensure confidence level is between 0 and 1
+    if not 0 <= confidence_level <= 1:
+        raise ValueError("Confidence level must be between 0 and 1.")
+
+    # Use the Percent-Point Function (PPF), which is the inverse of the CDF, to get the z-score.
+    # Since our distribution is symmetric, we get the z-score for 1 minus half of the (1-confidence).
+    return norm.ppf(1 - (1 - confidence_level) / 2)
+
+
+def nstd_to_confidence(nstd: float) -> float:
+    """
+    Convert number of standard deviations (z-score) to a confidence level for a univariate Gaussian.
+    """
+    # Using the CDF to get the confidence level for the given z-score.
+    # Since our distribution is symmetric, we will subtract the left tail and multiply by 2.
+    return 2 * (norm.cdf(nstd) - 0.5)
